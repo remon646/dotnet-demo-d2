@@ -31,7 +31,8 @@
       "mcp__context7__get-library-docs",
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_console_messages",
-      "Bash(dotnet clean:*)"
+      "Bash(dotnet clean:*)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": []
   },

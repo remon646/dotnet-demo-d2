@@ -8,7 +8,6 @@
 @inject IEmployeeSearchService EmployeeSearchService
 @inject ILogger<EmployeeSearchDialog> Logger
 @inject ISnackbar Snackbar
-@inject IJSRuntime JSRuntime
 
 <MudDialog>
     <DialogContent>
@@ -153,8 +152,8 @@
         </MudContainer>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@(async () => await Cancel())" Color="Color.Secondary">キャンセル</MudButton>
-        <MudButton OnClick="@(async () => await SelectEmployee())" 
+        <MudButton OnClick="Cancel" Color="Color.Secondary">キャンセル</MudButton>
+        <MudButton OnClick="SelectEmployee" 
                  Color="Color.Primary" 
                  Variant="Variant.Filled"
                  Disabled="@(selectedEmployee == null)">
@@ -164,17 +163,17 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] MudBlazor.IDialogReference? MudDialog { get; set; }
+    /// <summary>
+    /// MudBlazorダイアログのインスタンス参照（Cascading Parameter）
+    /// </summary>
+    [CascadingParameter] 
+    public MudBlazor.IDialogReference? MudDialog { get; set; }
     [Parameter] public string Title { get; set; } = "社員選択";
     [Parameter] public bool AllowClear { get; set; } = true;
     [Parameter] public Employee? SelectedEmployee { get; set; }
     [Parameter] public EmployeeSelectorMode SearchMode { get; set; } = EmployeeSelectorMode.Standard;
 
     private SearchCriteria searchCriteria = new();
-    /// <summary>
-    /// JavaScript実行後の遅延時間（ミリ秒）
-    /// </summary>
-    private const int JAVASCRIPT_EXECUTION_DELAY_MS = 100;
     
     private IEnumerable<Employee>? searchResults = null;
     private Employee? selectedEmployee = null;
@@ -182,6 +181,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // MudDialog Cascading Parameter の診断ログ
+        Logger.LogInformation("EmployeeSearchDialog initializing - MudDialog reference: {IsNull}", 
+            MudDialog == null ? "NULL" : "OK");
+        
+        if (MudDialog != null)
+        {
+            Logger.LogInformation("MudDialog successfully injected with type: {DialogType}", MudDialog.GetType().Name);
+        }
+        
         // 初期選択状態の設定
         selectedEmployee = SelectedEmployee;
         
@@ -195,51 +203,6 @@
         }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            // MudBlazorのJavaScript初期化を待機
-            await Task.Delay(100);
-            
-            if (MudDialog == null)
-            {
-                Logger.LogWarning("MudDialog still null after render - checking alternatives");
-                await TryAlternativeDialogSetup();
-            }
-            else
-            {
-                Logger.LogDebug("MudDialog successfully initialized");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 代替手段でダイアログの初期化状態をチェック
-    /// </summary>
-    private async Task TryAlternativeDialogSetup()
-    {
-        try
-        {
-            var hasDialogs = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.hasOpenDialog");
-            if (hasDialogs)
-            {
-                Logger.LogInformation("MudBlazor dialog detected via safe JavaScript helper");
-            }
-            else
-            {
-                Logger.LogWarning("No MudBlazor dialogs detected in JavaScript");
-            }
-        }
-        catch (JSException ex)
-        {
-            Logger.LogWarning(ex, "JavaScript error during dialog detection");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Could not detect MudBlazor dialogs");
-        }
-    }
 
     private async Task SearchEmployees()
     {
@@ -325,121 +288,71 @@
         StateHasChanged();
     }
 
-    private async Task SelectEmployee()
+    /// <summary>
+    /// 社員選択時の処理
+    /// ダイアログを閉じて選択された社員を返す
+    /// </summary>
+    private void SelectEmployee()
     {
-        if (selectedEmployee != null)
-        {
-            Logger.LogInformation("Employee selected: {EmployeeNumber} - {Name}", 
-                selectedEmployee.EmployeeNumber, selectedEmployee.Name);
-            await CloseDialogSafely(DialogResult.Ok(selectedEmployee));
-        }
-        else
+        if (selectedEmployee == null)
         {
             Logger.LogWarning("SelectEmployee called but no employee was selected");
             Snackbar.Add("社員が選択されていません。", Severity.Warning);
+            return;
         }
-    }
 
-    private async Task Cancel()
-    {
-        Logger.LogInformation("Employee search dialog cancelled");
-        await CloseDialogSafely(DialogResult.Cancel());
+        try
+        {
+            Logger.LogInformation("Employee selected: {EmployeeNumber} - {Name}", 
+                selectedEmployee.EmployeeNumber, selectedEmployee.Name);
+
+            // MudDialog インスタンスの null チェックとエラーハンドリング
+            if (MudDialog == null)
+            {
+                Logger.LogError("MudDialog cascading parameter is null - dialog cannot be closed properly");
+                Snackbar.Add("ダイアログの処理中にエラーが発生しました。", Severity.Error);
+                return;
+            }
+
+            // ダイアログを正常終了として閉じる
+            MudDialog.Close(DialogResult.Ok(selectedEmployee));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error occurred while closing dialog with selected employee {EmployeeNumber}", 
+                selectedEmployee.EmployeeNumber);
+            Snackbar.Add("選択処理中にエラーが発生しました。", Severity.Error);
+        }
     }
 
     /// <summary>
-    /// 多段階フォールバック機能を持つ安全なダイアログ閉じ処理
+    /// ダイアログキャンセル時の処理
+    /// ダイアログをキャンセル状態で閉じる
     /// </summary>
-    /// <param name="result">ダイアログ結果</param>
-    private async Task CloseDialogSafely(DialogResult result)
+    private void Cancel()
     {
-        // 方法1: 標準的なMudDialog.Close() - 競合状態を防止
-        var dialogRef = MudDialog; // 局所変数にコピーして競合状態を回避
-        if (dialogRef != null)
-        {
-            try
-            {
-                Logger.LogTrace("Attempting to close dialog using MudDialog.Close()");
-                dialogRef.Close(result);
-                return;
-            }
-            catch (ObjectDisposedException ex)
-            {
-                Logger.LogWarning(ex, "MudDialog was disposed during close operation");
-            }
-            catch (JSException ex)
-            {
-                Logger.LogError(ex, "JavaScript error during MudDialog.Close()");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to close dialog with MudDialog.Close()");
-            }
-        }
-        else
-        {
-            Logger.LogWarning("MudDialog is null - attempting alternative methods");
-        }
-        
-        // 方法2: 安全なJavaScript関数呼び出し（MudBlazor内部API使用）
         try
         {
-            Logger.LogDebug("Attempting to close dialog using safe JavaScript interop");
-            var success = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.closeLastDialog");
-            
-            if (success)
+            Logger.LogInformation("Employee search dialog cancelled");
+
+            // MudDialog インスタンスの null チェックとエラーハンドリング
+            if (MudDialog == null)
             {
-                Logger.LogDebug("Dialog closed successfully via JavaScript helper");
-                await Task.Delay(JAVASCRIPT_EXECUTION_DELAY_MS);
+                Logger.LogError("MudDialog cascading parameter is null - dialog cannot be closed properly");
+                Snackbar.Add("ダイアログの処理中にエラーが発生しました。", Severity.Error);
                 return;
             }
-            else
-            {
-                Logger.LogWarning("JavaScript helper could not close dialog");
-            }
-        }
-        catch (JSException ex)
-        {
-            Logger.LogError(ex, "JavaScript execution failed during dialog close");
-        }
-        catch (TaskCanceledException ex)
-        {
-            Logger.LogWarning(ex, "Dialog close operation was cancelled");
+
+            // ダイアログをキャンセル状態で閉じる
+            MudDialog.Close(DialogResult.Cancel());
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to close dialog with JavaScript interop");
+            Logger.LogError(ex, "Error occurred while cancelling dialog");
+            Snackbar.Add("キャンセル処理中にエラーが発生しました。", Severity.Error);
         }
-        
-        // 方法3: DOM操作による強制閉じ（安全な実装）
-        try
-        {
-            Logger.LogDebug("Attempting to close dialog using DOM manipulation");
-            var success = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.forceCloseDialog");
-            
-            if (success)
-            {
-                Logger.LogDebug("Dialog closed successfully via DOM manipulation");
-                await Task.Delay(JAVASCRIPT_EXECUTION_DELAY_MS);
-                return;
-            }
-            else
-            {
-                Logger.LogWarning("DOM manipulation could not close dialog");
-            }
-        }
-        catch (JSException ex)
-        {
-            Logger.LogError(ex, "JavaScript execution failed during DOM manipulation");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to close dialog with DOM manipulation");
-        }
-        
-        // すべての方法が失敗した場合
-        Logger.LogInformation("All dialog close methods failed - showing user guidance");
-        Snackbar.Add("ダイアログを閉じることができませんでした。ページをリロードしてください。", Severity.Error);
     }
+
 
     private class SearchCriteria
     {
