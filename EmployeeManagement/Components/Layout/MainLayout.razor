@@ -1,0 +1,441 @@
+@using EmployeeManagement.Application.Interfaces
+@using MudBlazor
+@inherits LayoutComponentBase
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+@implements IAsyncDisposable
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    @if (isAuthenticated)
+    {
+        <MudAppBar Elevation="1">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+            <MudText Typo="Typo.h6">社員情報管理システム</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.body2" Class="mr-4">@currentUserName</MudText>
+            <MudButton Color="Color.Inherit" 
+                      StartIcon="@Icons.Material.Filled.Logout" 
+                      OnClick="@HandleLogout"
+                      Disabled="@isLoggingOut">
+                @if (isLoggingOut)
+                {
+                    <text>ログアウト中...</text>
+                }
+                else
+                {
+                    <text>ログアウト</text>
+                }
+            </MudButton>
+        </MudAppBar>
+        
+        <MudDrawer @bind-Open="_drawerOpen" 
+                   Elevation="2"
+                   Variant="@_drawerVariant"
+                   Breakpoint="@_breakpoint"
+                   ClipMode="DrawerClipMode.Always">
+            <MudDrawerHeader>
+                <MudText Typo="Typo.h6">メニュー</MudText>
+            </MudDrawerHeader>
+            <NavMenu />
+        </MudDrawer>
+        
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    }
+    else
+    {
+        @Body
+    }
+</MudLayout>
+
+@code {
+    /// <summary>
+    /// デスクトップとモバイルの境界となるブレークポイント（768px）
+    /// </summary>
+    private const int DESKTOP_BREAKPOINT = 768;
+    
+    /// <summary>
+    /// JavaScript初期化の再試行回数
+    /// </summary>
+    private const int JAVASCRIPT_RETRY_COUNT = 3;
+    
+    /// <summary>
+    /// JavaScript初期化の再試行遅延時間（ミリ秒）
+    /// </summary>
+    private const int JAVASCRIPT_RETRY_DELAY_MS = 100;
+    
+    /// <summary>
+    /// ログアウト時の待機時間（ミリ秒）
+    /// </summary>
+    private const int LOGOUT_DELAY_MS = 500;
+
+    /// <summary>
+    /// ドロワーの開閉状態
+    /// </summary>
+    private bool _drawerOpen = true;
+    
+    /// <summary>
+    /// ドロワーの表示バリアント（レスポンシブ対応）
+    /// </summary>
+    private DrawerVariant _drawerVariant = DrawerVariant.Responsive;
+    
+    /// <summary>
+    /// レスポンシブのブレークポイント
+    /// </summary>
+    private Breakpoint _breakpoint = Breakpoint.Md;
+    
+    /// <summary>
+    /// 現在のデバイスがモバイルサイズかどうか
+    /// </summary>
+    private bool _isMobile = false;
+    
+    /// <summary>
+    /// レイアウトヘルパーJavaScriptモジュールの参照
+    /// </summary>
+    private IJSObjectReference? _layoutHelperModule;
+    
+    /// <summary>
+    /// .NET参照（JavaScriptからのコールバック用）
+    /// </summary>
+    private DotNetObjectReference<MainLayout>? _dotNetRef;
+
+    private bool isAuthenticated = false;
+    private string currentUserName = "";
+    private bool isLoggingOut = false;
+
+    /// <summary>
+    /// コンポーネントの初期化処理
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // ナビゲーション変更イベントを購読して認証状態を更新
+            Navigation.LocationChanged += OnLocationChanged;
+            
+            // 認証状態の更新
+            await UpdateAuthenticationState();
+        }
+        catch (Exception ex)
+        {
+            // エラー時は非認証状態にフォールバック
+            Console.WriteLine($"Error in OnInitializedAsync: {ex.Message}");
+            isAuthenticated = false;
+        }
+    }
+
+    /// <summary>
+    /// 初回レンダリング後の処理（認証状態更新とレスポンシブ機能初期化）
+    /// </summary>
+    /// <param name="firstRender">初回レンダリングかどうか</param>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Console.WriteLine("=== MainLayout OnAfterRenderAsync (firstRender) called ===");
+            try
+            {
+                // 認証状態の更新
+                await UpdateAuthenticationState();
+                Console.WriteLine($"After render auth state - isAuthenticated: {isAuthenticated}, user: {currentUserName}");
+                
+                // レスポンシブ機能の初期化
+                await InitializeResponsiveLayout();
+                
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in MainLayout OnAfterRenderAsync: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task UpdateAuthenticationState()
+    {
+        Console.WriteLine("=== UpdateAuthenticationState called ===");
+        
+        try
+        {
+            isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            Console.WriteLine($"Auth service returned: {isAuthenticated}");
+            
+            if (isAuthenticated)
+            {
+                var user = await AuthService.GetCurrentUserAsync();
+                currentUserName = user?.DisplayName ?? "";
+                Console.WriteLine($"Retrieved user: {currentUserName}");
+            }
+            else
+            {
+                currentUserName = "";
+                Console.WriteLine("Not authenticated - cleared user name");
+            }
+        }
+        catch (Exception ex)  
+        {
+            Console.WriteLine($"Error in UpdateAuthenticationState: {ex.Message}");
+            isAuthenticated = false;
+            currentUserName = "";
+        }
+    }
+
+    /// <summary>
+    /// レスポンシブレイアウトの初期化処理
+    /// </summary>
+    private async Task InitializeResponsiveLayout()
+    {
+        try
+        {
+            Console.WriteLine("=== Initializing responsive layout ===");
+            
+            // .NET参照を作成（JavaScriptからのコールバック用）
+            _dotNetRef = DotNetObjectReference.Create(this);
+            
+            // レイアウトヘルパーJavaScriptモジュールを読み込み（再試行機能付き）
+            for (int attempt = 0; attempt < JAVASCRIPT_RETRY_COUNT; attempt++)
+            {
+                try
+                {
+                    _layoutHelperModule = await JS.InvokeAsync<IJSObjectReference>(
+                        "import", "/js/layout-helper.js");
+                    
+                    // モジュールが正しく読み込まれたか確認
+                    var screenInfo = await _layoutHelperModule.InvokeAsync<dynamic>(
+                        "layoutHelper.initialize", _dotNetRef);
+                    
+                    // 初期状態を設定
+                    await UpdateLayoutForScreenSize(screenInfo);
+                    
+                    Console.WriteLine($"Responsive layout initialized on attempt {attempt + 1}. Mobile: {_isMobile}");
+                    return;
+                }
+                catch (Exception ex) when (attempt < JAVASCRIPT_RETRY_COUNT - 1)
+                {
+                    Console.WriteLine($"Layout initialization attempt {attempt + 1} failed: {ex.Message}");
+                    await Task.Delay(JAVASCRIPT_RETRY_DELAY_MS * (attempt + 1)); // Progressive delay
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing responsive layout: {ex.Message}");
+            // フォールバック：デスクトップとして扱う
+            _isMobile = false;
+            _drawerOpen = true;
+        }
+    }
+
+    /// <summary>
+    /// ドロワーの表示状態を切り替え
+    /// </summary>
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+        Console.WriteLine($"Drawer toggled. Open: {_drawerOpen}, Mobile: {_isMobile}");
+    }
+
+    /// <summary>
+    /// ブレークポイント変更時のコールバック（JavaScriptから呼び出される）
+    /// </summary>
+    /// <param name="screenInfo">画面サイズ情報</param>
+    [JSInvokable]
+    public async Task OnBreakpointChanged(object screenInfo)
+    {
+        try
+        {
+            // 入力値の検証
+            if (screenInfo == null)
+            {
+                Console.WriteLine("Warning: screenInfo is null, using default values");
+                _isMobile = false;
+                _drawerOpen = true;
+                StateHasChanged();
+                return;
+            }
+
+            Console.WriteLine($"=== Breakpoint changed callback received ===");
+            await UpdateLayoutForScreenSize(screenInfo);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in breakpoint changed callback: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 画面サイズに応じてレイアウトを更新
+    /// </summary>
+    /// <param name="screenInfo">画面サイズ情報</param>
+    private async Task UpdateLayoutForScreenSize(dynamic screenInfo)
+    {
+        try
+        {
+            // 画面サイズ情報を解析
+            var width = (int)screenInfo.width;
+            var isMobile = (bool)screenInfo.isMobile;
+            var breakpoint = (string)screenInfo.breakpoint;
+            
+            Console.WriteLine($"Screen update - Width: {width}, Mobile: {isMobile}, Breakpoint: {breakpoint}");
+            
+            var wasMobile = _isMobile;
+            _isMobile = isMobile;
+            
+            // デバイスタイプが変更された場合の処理
+            if (wasMobile != _isMobile)
+            {
+                if (_isMobile)
+                {
+                    // モバイルに変更：ドロワーを閉じる
+                    _drawerOpen = false;
+                    Console.WriteLine("Switched to mobile: drawer closed");
+                }
+                else
+                {
+                    // デスクトップに変更：ドロワーを開く
+                    _drawerOpen = true;
+                    Console.WriteLine("Switched to desktop: drawer opened");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating layout for screen size: {ex.Message}");
+        }
+    }
+
+
+    private async Task HandleLogout()
+    {
+        Console.WriteLine("=== HandleLogout called! ===");
+        
+        try
+        {
+            // ログアウト状態フラグを設定
+            isLoggingOut = true;
+            StateHasChanged();
+            
+            Console.WriteLine("Setting logout state...");
+            
+            // 短い待機
+            await Task.Delay(500);
+            
+            // 認証状態をクリア
+            isAuthenticated = false;
+            currentUserName = "";
+            isLoggingOut = false;
+            StateHasChanged();
+            
+            Console.WriteLine("Cleared authentication state");
+            
+            // ログアウト処理を実行
+            await AuthService.LogoutAsync();
+            Console.WriteLine("AuthService.LogoutAsync completed");
+            
+            // 成功通知
+            Snackbar.Add("ログアウトしました", Severity.Success);
+            
+            // 短い待機後にリダイレクト
+            await Task.Delay(1000);
+            
+            Console.WriteLine("Attempting navigation to login");
+            Navigation.NavigateTo("/login", replace: true);
+            
+            Console.WriteLine("Navigation.NavigateTo called");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            
+            isLoggingOut = false;
+            isAuthenticated = false;
+            currentUserName = "";
+            StateHasChanged();
+            
+            Snackbar.Add("ログアウト処理でエラーが発生しました", Severity.Error);
+            Navigation.NavigateTo("/login", replace: true);
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Console.WriteLine($"=== Location changed to: {e.Location} ===");
+        try
+        {
+            await UpdateAuthenticationState();
+            Console.WriteLine($"Auth state after navigation - isAuthenticated: {isAuthenticated}, user: {currentUserName}");
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in OnLocationChanged: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// リソースの同期的な解放処理
+    /// </summary>
+    public void Dispose()
+    {
+        // 非同期リソース解放を呼び出し
+        DisposeAsync().AsTask().Wait();
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// リソースの非同期的な解放処理
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            Console.WriteLine("=== MainLayout disposing ===");
+            
+            // ナビゲーションイベントの購読解除
+            Navigation.LocationChanged -= OnLocationChanged;
+            
+            // レイアウトヘルパーのクリーンアップ
+            if (_layoutHelperModule != null)
+            {
+                try
+                {
+                    await _layoutHelperModule.InvokeVoidAsync("layoutHelper.dispose");
+                    await _layoutHelperModule.DisposeAsync();
+                    _layoutHelperModule = null;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error disposing layout helper: {ex.Message}");
+                }
+            }
+            
+            // .NET参照の解放
+            if (_dotNetRef != null)
+            {
+                _dotNetRef.Dispose();
+                _dotNetRef = null;
+            }
+            
+            Console.WriteLine("MainLayout disposed successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in MainLayout dispose: {ex.Message}");
+        }
+        
+        GC.SuppressFinalize(this);
+    }
+}

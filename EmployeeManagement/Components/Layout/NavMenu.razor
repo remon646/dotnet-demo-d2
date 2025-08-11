@@ -1,0 +1,42 @@
+@using MudBlazor
+
+<MudNavMenu>
+    <!-- ホームページ -->
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+        ホーム
+    </MudNavLink>
+    
+    <!-- 社員管理セクション -->
+    <MudNavGroup Title="👥 社員管理" 
+                 Icon="@Icons.Material.Filled.People" 
+                 Expanded="false"
+                 Class="nav-group-header">
+        <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.Search">
+            社員一覧・検索
+        </MudNavLink>
+        <MudNavLink Href="/employees/new" Icon="@Icons.Material.Filled.PersonAdd">
+            新規社員登録
+        </MudNavLink>
+        <MudNavLink Href="/employees/reports" Icon="@Icons.Material.Filled.Assessment">
+            社員レポート
+        </MudNavLink>
+    </MudNavGroup>
+    
+    <!-- 部門管理セクション -->
+    <MudNavGroup Title="🏢 部門管理" 
+                 Icon="@Icons.Material.Filled.Business" 
+                 Expanded="false"
+                 Class="nav-group-header">
+        <MudNavLink Href="/departments" Icon="@Icons.Material.Filled.BusinessCenter">
+            部門マスタ管理
+        </MudNavLink>
+        <MudNavLink Href="/departments/structure" Icon="@Icons.Material.Filled.AccountTree">
+            組織構造図
+        </MudNavLink>
+        <MudNavLink Href="/departments/analytics" Icon="@Icons.Material.Filled.BarChart">
+            部門分析
+        </MudNavLink>
+    </MudNavGroup>
+    
+</MudNavMenu>
+

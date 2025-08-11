@@ -1,0 +1,451 @@
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using MudBlazor
+@using Microsoft.Extensions.Logging
+@inject IEmployeeRepository EmployeeRepository
+@inject IEmployeeSearchService EmployeeSearchService
+@inject ILogger<EmployeeSearchDialog> Logger
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 800px;">
+            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">
+                🔍 社員検索
+            </MudText>
+
+            <!-- 検索条件 -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-3">検索条件</MudText>
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="searchCriteria.EmployeeNumber"
+                                        Label="社員番号"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Badge"
+                                        Class="mb-2" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="searchCriteria.Name"
+                                        Label="氏名"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Person"
+                                        Class="mb-2" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="searchCriteria.Department"
+                                     Label="部署"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomCenter"
+                                     Class="mb-2">
+                                <MudSelectItem Value="@((Department?)null)">（すべて）</MudSelectItem>
+                                @foreach (Department dept in Enum.GetValues<Department>())
+                                {
+                                    <MudSelectItem Value="@((Department?)dept)">@dept.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="searchCriteria.Position"
+                                     Label="役職"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomCenter"
+                                     Class="mb-2">
+                                <MudSelectItem Value="@((Domain.Enums.Position?)null)">（すべて）</MudSelectItem>
+                                @foreach (Domain.Enums.Position pos in Enum.GetValues<Domain.Enums.Position>())
+                                {
+                                    <MudSelectItem Value="@((Domain.Enums.Position?)pos)">@pos.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" Class="text-center">
+                            <MudButton Variant="Variant.Filled"
+                                     Color="Color.Primary"
+                                     StartIcon="@Icons.Material.Filled.Search"
+                                     OnClick="SearchEmployees"
+                                     Disabled="@isSearching">
+                                @if (isSearching)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>検索中...</span>
+                                }
+                                else
+                                {
+                                    <span>検索</span>
+                                }
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                     Color="Color.Secondary"
+                                     StartIcon="@Icons.Material.Filled.Clear"
+                                     OnClick="ClearSearch"
+                                     Class="ml-2">
+                                クリア
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- 検索結果 -->
+            @if (searchResults != null)
+            {
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-3">
+                            検索結果 (@searchResults.Count() 件)
+                        </MudText>
+                        
+                        @if (searchResults.Any())
+                        {
+                            <MudDataGrid T="Employee" Items="@searchResults" 
+                                       Hover="true" 
+                                       RowClick="@RowClickEvent"
+                                       SelectedItem="@selectedEmployee"
+                                       SelectedItemChanged="@((Employee item) => selectedEmployee = item)"
+                                       Height="400px"
+                                       FixedHeader="true">
+                                <Columns>
+                                    <PropertyColumn Property="x => x.EmployeeNumber" Title="社員番号" />
+                                    <PropertyColumn Property="x => x.Name" Title="氏名" />
+                                    <PropertyColumn Property="x => x.CurrentDepartmentDisplayName" Title="部署" />
+                                    <PropertyColumn Property="x => x.CurrentPositionDisplayName" Title="役職" />
+                                    <PropertyColumn Property="x => x.Email" Title="Email" />
+                                </Columns>
+                            </MudDataGrid>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info">
+                                該当する社員が見つかりませんでした。検索条件を変更してお試しください。
+                            </MudAlert>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+
+            @if (selectedEmployee != null)
+            {
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Success" Class="mb-2">選択中の社員</MudText>
+                        <MudAlert Severity="Severity.Success">
+                            <div style="display: flex; align-items: center;">
+                                <MudIcon Icon="@Icons.Material.Filled.PersonPin" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.body1">
+                                        <strong>@selectedEmployee.Name</strong> (@selectedEmployee.EmployeeNumber)
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Style="color: gray;">
+                                        @selectedEmployee.CurrentDepartmentDisplayName - @selectedEmployee.CurrentPositionDisplayName
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudAlert>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(async () => await Cancel())" Color="Color.Secondary">キャンセル</MudButton>
+        <MudButton OnClick="@(async () => await SelectEmployee())" 
+                 Color="Color.Primary" 
+                 Variant="Variant.Filled"
+                 Disabled="@(selectedEmployee == null)">
+            選択
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudBlazor.IDialogReference? MudDialog { get; set; }
+    [Parameter] public string Title { get; set; } = "社員選択";
+    [Parameter] public bool AllowClear { get; set; } = true;
+    [Parameter] public Employee? SelectedEmployee { get; set; }
+    [Parameter] public EmployeeSelectorMode SearchMode { get; set; } = EmployeeSelectorMode.Standard;
+
+    private SearchCriteria searchCriteria = new();
+    /// <summary>
+    /// JavaScript実行後の遅延時間（ミリ秒）
+    /// </summary>
+    private const int JAVASCRIPT_EXECUTION_DELAY_MS = 100;
+    
+    private IEnumerable<Employee>? searchResults = null;
+    private Employee? selectedEmployee = null;
+    private bool isSearching = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 初期選択状態の設定
+        selectedEmployee = SelectedEmployee;
+        
+        // パフォーマンス最適化: 初期化時は検索結果を空にし、ユーザーアクションを待つ
+        searchResults = Enumerable.Empty<Employee>();
+        
+        if (SelectedEmployee != null)
+        {
+            // 既存選択がある場合のみその情報を表示
+            searchResults = new[] { SelectedEmployee };
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // MudBlazorのJavaScript初期化を待機
+            await Task.Delay(100);
+            
+            if (MudDialog == null)
+            {
+                Logger.LogWarning("MudDialog still null after render - checking alternatives");
+                await TryAlternativeDialogSetup();
+            }
+            else
+            {
+                Logger.LogDebug("MudDialog successfully initialized");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 代替手段でダイアログの初期化状態をチェック
+    /// </summary>
+    private async Task TryAlternativeDialogSetup()
+    {
+        try
+        {
+            var hasDialogs = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.hasOpenDialog");
+            if (hasDialogs)
+            {
+                Logger.LogInformation("MudBlazor dialog detected via safe JavaScript helper");
+            }
+            else
+            {
+                Logger.LogWarning("No MudBlazor dialogs detected in JavaScript");
+            }
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "JavaScript error during dialog detection");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not detect MudBlazor dialogs");
+        }
+    }
+
+    private async Task SearchEmployees()
+    {
+        isSearching = true;
+        
+        try
+        {
+            // 検索モードに応じて適切な検索方法を選択
+            if (SearchMode == EmployeeSelectorMode.ManagerOnly)
+            {
+                // 責任者候補のみを検索
+                var keyword = string.IsNullOrWhiteSpace(searchCriteria.EmployeeNumber) && string.IsNullOrWhiteSpace(searchCriteria.Name) 
+                    ? "" 
+                    : $"{searchCriteria.EmployeeNumber} {searchCriteria.Name}".Trim();
+                
+                searchResults = await EmployeeSearchService.SearchEligibleManagersAsync(keyword, 1000);
+                
+                // 追加フィルタリング（部門・役職）
+                if (searchCriteria.Department.HasValue || searchCriteria.Position.HasValue)
+                {
+                    searchResults = searchResults.Where(emp =>
+                        (!searchCriteria.Department.HasValue || emp.CurrentDepartment == searchCriteria.Department.Value) &&
+                        (!searchCriteria.Position.HasValue || emp.CurrentPosition == searchCriteria.Position.Value)
+                    );
+                }
+            }
+            else
+            {
+                // 標準検索（全社員対象）
+                var criteria = new EmployeeSearchCriteria
+                {
+                    EmployeeNumber = searchCriteria.EmployeeNumber,
+                    Name = searchCriteria.Name,
+                    ActiveOnly = true
+                };
+
+                if (criteria.IsEmpty)
+                {
+                    // 検索条件が空の場合は全社員を取得
+                    var allEmployees = await EmployeeRepository.GetAllAsync();
+                    searchResults = allEmployees.Where(emp =>
+                        (!searchCriteria.Department.HasValue || emp.CurrentDepartment == searchCriteria.Department.Value) &&
+                        (!searchCriteria.Position.HasValue || emp.CurrentPosition == searchCriteria.Position.Value)
+                    ).OrderBy(emp => emp.EmployeeNumber);
+                }
+                else
+                {
+                    var detailedResults = await EmployeeSearchService.SearchDetailedAsync(criteria);
+                    
+                    // 部門・役職フィルタ追加
+                    searchResults = detailedResults.Where(emp =>
+                        (!searchCriteria.Department.HasValue || emp.CurrentDepartment == searchCriteria.Department.Value) &&
+                        (!searchCriteria.Position.HasValue || emp.CurrentPosition == searchCriteria.Position.Value)
+                    ).OrderBy(emp => emp.EmployeeNumber);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // セキュアなエラーハンドリング
+            searchResults = Enumerable.Empty<Employee>();
+            Logger.LogError(ex, "Employee search failed for mode {SearchMode}", SearchMode);
+            Snackbar.Add("社員検索中にエラーが発生しました。しばらく時間をおいてお試しください。", Severity.Error);
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged(); // 一度の呼び出しで十分
+        }
+    }
+
+    private void ClearSearch()
+    {
+        searchCriteria = new SearchCriteria();
+        selectedEmployee = null;
+        searchResults = null;
+        StateHasChanged();
+    }
+
+    private void RowClickEvent(DataGridRowClickEventArgs<Employee> args)
+    {
+        selectedEmployee = args.Item;
+        StateHasChanged();
+    }
+
+    private async Task SelectEmployee()
+    {
+        if (selectedEmployee != null)
+        {
+            Logger.LogInformation("Employee selected: {EmployeeNumber} - {Name}", 
+                selectedEmployee.EmployeeNumber, selectedEmployee.Name);
+            await CloseDialogSafely(DialogResult.Ok(selectedEmployee));
+        }
+        else
+        {
+            Logger.LogWarning("SelectEmployee called but no employee was selected");
+            Snackbar.Add("社員が選択されていません。", Severity.Warning);
+        }
+    }
+
+    private async Task Cancel()
+    {
+        Logger.LogInformation("Employee search dialog cancelled");
+        await CloseDialogSafely(DialogResult.Cancel());
+    }
+
+    /// <summary>
+    /// 多段階フォールバック機能を持つ安全なダイアログ閉じ処理
+    /// </summary>
+    /// <param name="result">ダイアログ結果</param>
+    private async Task CloseDialogSafely(DialogResult result)
+    {
+        // 方法1: 標準的なMudDialog.Close() - 競合状態を防止
+        var dialogRef = MudDialog; // 局所変数にコピーして競合状態を回避
+        if (dialogRef != null)
+        {
+            try
+            {
+                Logger.LogTrace("Attempting to close dialog using MudDialog.Close()");
+                dialogRef.Close(result);
+                return;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Logger.LogWarning(ex, "MudDialog was disposed during close operation");
+            }
+            catch (JSException ex)
+            {
+                Logger.LogError(ex, "JavaScript error during MudDialog.Close()");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to close dialog with MudDialog.Close()");
+            }
+        }
+        else
+        {
+            Logger.LogWarning("MudDialog is null - attempting alternative methods");
+        }
+        
+        // 方法2: 安全なJavaScript関数呼び出し（MudBlazor内部API使用）
+        try
+        {
+            Logger.LogDebug("Attempting to close dialog using safe JavaScript interop");
+            var success = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.closeLastDialog");
+            
+            if (success)
+            {
+                Logger.LogDebug("Dialog closed successfully via JavaScript helper");
+                await Task.Delay(JAVASCRIPT_EXECUTION_DELAY_MS);
+                return;
+            }
+            else
+            {
+                Logger.LogWarning("JavaScript helper could not close dialog");
+            }
+        }
+        catch (JSException ex)
+        {
+            Logger.LogError(ex, "JavaScript execution failed during dialog close");
+        }
+        catch (TaskCanceledException ex)
+        {
+            Logger.LogWarning(ex, "Dialog close operation was cancelled");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to close dialog with JavaScript interop");
+        }
+        
+        // 方法3: DOM操作による強制閉じ（安全な実装）
+        try
+        {
+            Logger.LogDebug("Attempting to close dialog using DOM manipulation");
+            var success = await JSRuntime.InvokeAsync<bool>("MudBlazorDialogHelper.forceCloseDialog");
+            
+            if (success)
+            {
+                Logger.LogDebug("Dialog closed successfully via DOM manipulation");
+                await Task.Delay(JAVASCRIPT_EXECUTION_DELAY_MS);
+                return;
+            }
+            else
+            {
+                Logger.LogWarning("DOM manipulation could not close dialog");
+            }
+        }
+        catch (JSException ex)
+        {
+            Logger.LogError(ex, "JavaScript execution failed during DOM manipulation");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to close dialog with DOM manipulation");
+        }
+        
+        // すべての方法が失敗した場合
+        Logger.LogInformation("All dialog close methods failed - showing user guidance");
+        Snackbar.Add("ダイアログを閉じることができませんでした。ページをリロードしてください。", Severity.Error);
+    }
+
+    private class SearchCriteria
+    {
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public Department? Department { get; set; } = null;
+        public Domain.Enums.Position? Position { get; set; } = null;
+    }
+}

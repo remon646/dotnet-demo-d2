@@ -1,0 +1,326 @@
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components.Dialogs
+@using EmployeeManagement.Constants
+@using MudBlazor
+@using Microsoft.Extensions.Logging
+@inject IEmployeeSearchService EmployeeSearchService
+@inject IDialogService DialogService
+@inject ILogger<EmployeeSelectorComponent> Logger
+@inject ISnackbar Snackbar
+
+<div class="@EmployeeSelectorCssClasses.MAIN_CONTAINER">
+    @if (Mode == EmployeeSelectorMode.AutocompleteOnly)
+    {
+        <!-- 軽量オートコンプリートモード -->
+        <MudAutocomplete T="Employee" 
+                         Value="SelectedEmployee"
+                         SearchFunc="SearchEmployeesAutocomplete"
+                         ToStringFunc="@(e => e?.EmployeeNumber ?? string.Empty)"
+                         Label="@Label"
+                         Variant="@Variant"
+                         Required="@Required"
+                         Disabled="@Disabled"
+                         Class="@Class"
+                         HelperText="@HelperText"
+                         Adornment="@(ShowSearchButton ? Adornment.End : Adornment.None)"
+                         AdornmentIcon="@(ShowSearchButton ? Icons.Material.Filled.Search : string.Empty)"
+                         OnAdornmentClick="@(ShowSearchButton ? OpenSearchDialog : null)"
+                         ValueChanged="OnEmployeeSelectionChanged">
+            <ItemTemplate Context="employee">
+                @EmployeeItemTemplate(employee)
+            </ItemTemplate>
+        </MudAutocomplete>
+    }
+    else
+    {
+        <!-- フル機能モード（オートコンプリート + 詳細検索） -->
+        <MudAutocomplete T="Employee" 
+                         Value="SelectedEmployee"
+                         SearchFunc="SearchEmployeesAutocomplete"
+                         ToStringFunc="@(e => e?.EmployeeNumber ?? string.Empty)"
+                         Label="@Label"
+                         Variant="@Variant"
+                         Required="@Required"
+                         Disabled="@Disabled"
+                         Class="@Class"
+                         HelperText="@HelperText"
+                         Adornment="Adornment.End"
+                         AdornmentIcon="@Icons.Material.Filled.Search"
+                         OnAdornmentClick="OpenSearchDialog"
+                         ValueChanged="OnEmployeeSelectionChanged">
+            <ItemTemplate Context="employee">
+                @EmployeeItemTemplate(employee)
+            </ItemTemplate>
+        </MudAutocomplete>
+    }
+
+    @if (ShowSelectedEmployeeInfo && SelectedEmployee != null)
+    {
+        <MudCard Elevation="2" Class="mt-2">
+            <MudCardContent Class="pa-3">
+                <div class="d-flex align-center justify-space-between">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="Icons.Material.Filled.PersonPin" Color="Color.Success" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.body2">
+                                <strong>@SelectedEmployee.Name</strong> (@SelectedEmployee.EmployeeNumber)
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="color: gray;">
+                                @SelectedEmployee.CurrentDepartmentDisplayName - @SelectedEmployee.CurrentPositionDisplayName
+                            </MudText>
+                        </div>
+                    </div>
+                    @if (AllowClear && !Disabled)
+                    {
+                        <MudIconButton Icon="Icons.Material.Filled.Clear" 
+                                     Size="Size.Small" 
+                                     Color="Color.Default"
+                                     OnClick="ClearSelection" 
+                                     Title="選択をクリア" />
+                    }
+                </div>
+            </MudCardContent>
+        </MudCard>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// 選択モード
+    /// </summary>
+    [Parameter] public EmployeeSelectorMode Mode { get; set; } = EmployeeSelectorMode.Standard;
+
+    /// <summary>
+    /// 選択された社員
+    /// </summary>
+    [Parameter] public Employee? SelectedEmployee { get; set; }
+
+    /// <summary>
+    /// 社員選択時のコールバック
+    /// </summary>
+    [Parameter] public EventCallback<Employee?> SelectedEmployeeChanged { get; set; }
+
+    /// <summary>
+    /// ラベル
+    /// </summary>
+    [Parameter] public string Label { get; set; } = "社員選択";
+
+    /// <summary>
+    /// バリアント
+    /// </summary>
+    [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
+
+    /// <summary>
+    /// 必須入力フラグ
+    /// </summary>
+    [Parameter] public bool Required { get; set; } = false;
+
+    /// <summary>
+    /// 無効化フラグ
+    /// </summary>
+    [Parameter] public bool Disabled { get; set; } = false;
+
+    /// <summary>
+    /// CSSクラス
+    /// </summary>
+    [Parameter] public string Class { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ヘルプテキスト
+    /// </summary>
+    [Parameter] public string HelperText { get; set; } = "社員番号を入力するか、検索ボタンで選択してください";
+
+    /// <summary>
+    /// 検索ボタンを表示するか（オートコンプリートモードでも検索ダイアログを開けるようにする）
+    /// </summary>
+    [Parameter] public bool ShowSearchButton { get; set; } = true;
+
+    /// <summary>
+    /// 選択された社員の詳細情報を表示するか
+    /// </summary>
+    [Parameter] public bool ShowSelectedEmployeeInfo { get; set; } = false;
+
+    /// <summary>
+    /// クリアボタンを表示するか
+    /// </summary>
+    [Parameter] public bool AllowClear { get; set; } = true;
+
+    /// <summary>
+    /// 検索ダイアログのタイトル
+    /// </summary>
+    [Parameter] public string DialogTitle { get; set; } = "社員選択";
+
+    /// <summary>
+    /// オートコンプリート最大結果数
+    /// </summary>
+    [Parameter] public int MaxAutocompleteResults { get; set; } = EmployeeSelectorConstants.DEFAULT_MAX_AUTOCOMPLETE_RESULTS;
+
+    /// <summary>
+    /// オートコンプリート検索の最小文字数
+    /// </summary>
+    [Parameter] public int MinSearchLength { get; set; } = EmployeeSelectorConstants.DEFAULT_MIN_SEARCH_LENGTH;
+
+    /// <summary>
+    /// 社員アイテムテンプレートの共通実装
+    /// </summary>
+    /// <param name="employee">表示する社員</param>
+    /// <returns>レンダリングされたテンプレート</returns>
+    private RenderFragment EmployeeItemTemplate(Employee employee) => __builder =>
+    {
+        <div class="d-flex align-center">
+            <div class="flex-grow-1">
+                <MudText Typo="Typo.subtitle2">@employee.EmployeeNumber</MudText>
+                <MudText Typo="Typo.caption" Style="color: gray;">
+                    @employee.Name - @employee.CurrentDepartmentDisplayName
+                </MudText>
+            </div>
+            @if (Mode == EmployeeSelectorMode.ManagerOnly)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" 
+                         Variant="Variant.Text" Text="責任者候補" 
+                         Class="@EmployeeSelectorCssClasses.MANAGER_CANDIDATE_CHIP" />
+            }
+        </div>
+    };
+
+    /// <summary>
+    /// オートコンプリート用社員検索
+    /// </summary>
+    /// <param name="value">検索キーワード</param>
+    /// <param name="cancellationToken">キャンセレーショントークン</param>
+    /// <returns>検索結果</returns>
+    private async Task<IEnumerable<Employee>> SearchEmployeesAutocomplete(string value, CancellationToken cancellationToken)
+    {
+        // 最小文字数制限によるパフォーマンス最適化
+        if (string.IsNullOrWhiteSpace(value) || value.Length < MinSearchLength)
+        {
+            return Enumerable.Empty<Employee>();
+        }
+
+        try
+        {
+            // 選択モードに応じて適切な検索メソッドを呼び出し
+            return Mode switch
+            {
+                EmployeeSelectorMode.ManagerOnly => 
+                    await EmployeeSearchService.SearchEligibleManagersAsync(value, MaxAutocompleteResults, cancellationToken),
+                EmployeeSelectorMode.Standard or EmployeeSelectorMode.AutocompleteOnly => 
+                    await EmployeeSearchService.SearchForAutocompleteAsync(value, MaxAutocompleteResults, cancellationToken),
+                _ => Enumerable.Empty<Employee>()
+            };
+        }
+        catch (Exception ex)
+        {
+            // セキュアなエラーログ
+            Logger.LogWarning(ex, "Employee autocomplete search failed for mode {SearchMode}, keyword length {KeywordLength}", 
+                Mode, value?.Length ?? 0);
+            // エラー時は空のリストを返す
+            return Enumerable.Empty<Employee>();
+        }
+    }
+
+    /// <summary>
+    /// 社員選択変更時の処理
+    /// </summary>
+    /// <param name="employee">選択された社員</param>
+    private async Task OnEmployeeSelectionChanged(Employee? employee)
+    {
+        SelectedEmployee = employee;
+        await SelectedEmployeeChanged.InvokeAsync(employee);
+    }
+
+    /// <summary>
+    /// 選択をクリア
+    /// </summary>
+    private async Task ClearSelection()
+    {
+        await OnEmployeeSelectionChanged(null);
+    }
+
+    /// <summary>
+    /// 検索ダイアログを開く
+    /// </summary>
+    private async Task OpenSearchDialog()
+    {
+        if (Disabled) 
+        {
+            Logger.LogDebug("Search dialog open request ignored - component is disabled");
+            return;
+        }
+
+        try
+        {
+            Logger.LogInformation("Opening employee search dialog for mode {SearchMode}", Mode);
+            
+            var parameters = new DialogParameters
+            {
+                ["Title"] = DialogTitle,
+                ["AllowClear"] = AllowClear,
+                ["SelectedEmployee"] = SelectedEmployee,
+                ["SearchMode"] = Mode
+            };
+
+            var dialog = await DialogService.ShowAsync<EmployeeSearchDialog>(DialogTitle, parameters, new DialogOptions 
+            { 
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true,
+                CloseButton = true,
+                CloseOnEscapeKey = true,
+                BackdropClick = false // 誤操作防止のためバックドロップクリックでは閉じない
+            });
+
+            if (dialog == null)
+            {
+                Logger.LogWarning("Dialog creation failed");
+                Snackbar.Add("ダイアログの作成に失敗しました。", Severity.Error);
+                return;
+            }
+
+            Logger.LogDebug("Waiting for dialog result");
+            var result = await dialog.Result;
+
+            if (result == null)
+            {
+                Logger.LogWarning("Dialog result is null");
+                return;
+            }
+
+            Logger.LogInformation("Dialog closed - Canceled: {Canceled}, HasData: {HasData}", 
+                result.Canceled, result.Data != null);
+
+            if (!result.Canceled)
+            {
+                if (result.Data is Employee selectedEmployee)
+                {
+                    Logger.LogInformation("Employee selected from dialog: {EmployeeNumber} - {Name}", 
+                        selectedEmployee.EmployeeNumber, selectedEmployee.Name);
+                    await OnEmployeeSelectionChanged(selectedEmployee);
+                }
+                else if (result.Data == null)
+                {
+                    // クリア操作の場合
+                    Logger.LogInformation("Employee selection cleared from dialog");
+                    await OnEmployeeSelectionChanged(null);
+                }
+                else
+                {
+                    Logger.LogWarning("Dialog returned unexpected data type: {DataType}", result.Data?.GetType()?.Name ?? "null");
+                }
+            }
+            else
+            {
+                Logger.LogInformation("Dialog was cancelled by user");
+            }
+        }
+        catch (Exception ex)
+        {
+            // セキュアなエラーハンドリング
+            Logger.LogError(ex, "Employee search dialog failed to open for mode {SearchMode}", Mode);
+            Snackbar.Add("検索機能の実行中にエラーが発生しました。しばらく時間をおいてお試しください。", Severity.Error);
+        }
+    }
+}
+

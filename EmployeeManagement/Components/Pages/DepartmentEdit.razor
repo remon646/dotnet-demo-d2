@@ -1,0 +1,512 @@
+@page "/departments/edit/{DepartmentCode}"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Components
+@using EmployeeManagement.Components.Dialogs
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.ViewModels
+@using EmployeeManagement.Constants
+@using EmployeeManagement.Models
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@inherits AuthRequiredComponentBase
+
+@* 新しいサービス指向の依存性注入 *@
+@inject DepartmentEditViewModel ViewModel
+@inject IDepartmentDataService DataService
+@inject IDepartmentUIService UIService
+@inject IManagerValidationService ManagerValidationService
+@inject IDepartmentValidationService ValidationService
+@inject IEmployeeSearchService SearchService
+@inject IDialogService DialogService
+
+@* ViewModelのページタイトルを使用 *@
+<PageTitle>@ViewModel.PageTitle - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="ViewModel.BreadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    @* ViewModelのページタイトルを使用 *@
+    <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">
+        📊 @ViewModel.PageTitle
+    </MudText>
+
+    @* ViewModelのデータを使用 *@
+    @if (ViewModel.CurrentDepartment != null)
+    {
+        <MudCard Elevation="4">
+            <MudCardContent>
+                <EditForm Model="@ViewModel.CurrentDepartment" OnValidSubmit="@HandleSave" FormName="DepartmentForm">
+                    <DataAnnotationsValidator />
+                    
+                    <MudGrid Spacing="3">
+                        <!-- 基本情報セクション -->
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-2">基本情報</MudText>
+                            <MudDivider Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            @* ViewModelの状態を使用 *@
+                            @if (ViewModel.IsNewDepartment)
+                            {
+                                <MudTextField @bind-Value="ViewModel.CurrentDepartment.DepartmentCode"
+                                            Label="部署コード"
+                                            Variant="Variant.Outlined"
+                                            Required="true"
+                                            MaxLength="10"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Business"
+                                            AdornmentColor="Color.Primary"
+                                            Class="mb-3"
+                                            HelperText="部署を識別する一意のコードを入力してください" />
+                            }
+                            else
+                            {
+                                <MudTextField @bind-Value="ViewModel.CurrentDepartment.DepartmentCode"
+                                            Label="部署コード"
+                                            Variant="Variant.Outlined"
+                                            ReadOnly="true"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Business"
+                                            AdornmentColor="Color.Secondary"
+                                            Class="mb-3"
+                                            HelperText="部署コードは変更できません" />
+                            }
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="ViewModel.CurrentDepartment.DepartmentName"
+                                        Label="部署名"
+                                        Variant="Variant.Outlined"
+                                        Required="true"
+                                        MaxLength="50"
+                                        Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="ViewModel.CurrentDepartment.DepartmentType"
+                                     Label="部署区分"
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     Class="mb-3">
+                                @foreach (Department dept in Enum.GetValues<Department>())
+                                {
+                                    <MudSelectItem Value="@dept">@dept.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="ViewModel.EstablishedDate"
+                                         Label="設立日"
+                                         Variant="Variant.Outlined"
+                                         Class="mb-3" />
+                        </MudItem>
+
+                        <!-- 責任者情報セクション -->
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-2 mt-4">責任者情報</MudText>
+                            <MudDivider Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <EmployeeSelectorComponent Mode="EmployeeSelectorMode.ManagerOnly"
+                                                     SelectedEmployee="ViewModel.SelectedManager"
+                                                     SelectedEmployeeChanged="OnManagerSelectionChanged"
+                                                     Label="責任者社員番号（任意）"
+                                                     Variant="Variant.Outlined"
+                                                     ShowSelectedEmployeeInfo="false"
+                                                     AllowClear="true"
+                                                     DialogTitle="責任者選択"
+                                                     Class="mb-3"
+                                                     HelperText="責任者候補から選択してください" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            @if (!string.IsNullOrEmpty(ViewModel.CurrentDepartment.ManagerName))
+                            {
+                                <MudTextField Value="@ViewModel.CurrentDepartment.ManagerName"
+                                            Label="責任者名（自動設定）"
+                                            ReadOnly="true"
+                                            Variant="Variant.Outlined"
+                                            Class="mb-3"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Person"
+                                            AdornmentColor="Color.Success" />
+                            }
+                            else if (!string.IsNullOrEmpty(ViewModel.CurrentDepartment.ManagerEmployeeNumber))
+                            {
+                                <MudTextField Value="@("社員番号が見つかりません")"
+                                            Label="責任者名"
+                                            ReadOnly="true"
+                                            Variant="Variant.Outlined"
+                                            Class="mb-3"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Warning"
+                                            AdornmentColor="Color.Warning"
+                                            HelperText="社員番号が見つかりません" />
+                            }
+                            else
+                            {
+                                <MudTextField Value="@("責任者未設定")"
+                                            Label="責任者名"
+                                            ReadOnly="true"
+                                            Variant="Variant.Outlined"
+                                            Class="mb-3"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.PersonOutline"
+                                            AdornmentColor="Color.Default"
+                                            HelperText="責任者を設定する場合は社員番号を入力してください" />
+                            }
+                        </MudItem>
+
+                        @if (!string.IsNullOrEmpty(ViewModel.CurrentDepartment.ManagerEmployeeNumber) && !string.IsNullOrEmpty(ViewModel.CurrentDepartment.ManagerName))
+                        {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Success" Class="mb-3">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <div>
+                                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Class="mr-2" />
+                                            <strong>責任者設定済み:</strong> @ViewModel.CurrentDepartment.ManagerName (@ViewModel.CurrentDepartment.ManagerEmployeeNumber)
+                                        </div>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                                     Size="Size.Small" 
+                                                     Color="Color.Default"
+                                                     OnClick="ClearManager" 
+                                                     Title="責任者設定をクリア" />
+                                    </div>
+                                </MudAlert>
+                            </MudItem>
+                        }
+
+                        <!-- 詳細情報セクション -->
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-2 mt-4">詳細情報</MudText>
+                            <MudDivider Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="ViewModel.CurrentDepartment.Extension"
+                                        Label="内線番号"
+                                        Variant="Variant.Outlined"
+                                        MaxLength="10"
+                                        Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSwitch @bind-Value="ViewModel.CurrentDepartment.IsActive"
+                                     Label="有効"
+                                     Color="Color.Primary"
+                                     Class="mb-3" />
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="ViewModel.CurrentDepartment.Description"
+                                        Label="説明"
+                                        Variant="Variant.Outlined"
+                                        Lines="3"
+                                        MaxLength="500"
+                                        Class="mb-3" />
+                        </MudItem>
+
+                        @if (!ViewModel.IsNewDepartment)
+                        {
+                            <!-- メタデータ情報 -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-2 mt-4">作成・更新情報</MudText>
+                                <MudDivider Class="mb-3" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField Value="@ViewModel.CreatedAtDisplay"
+                                            Label="作成日時"
+                                            Variant="Variant.Outlined"
+                                            ReadOnly="true"
+                                            Class="mb-3" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField Value="@ViewModel.UpdatedAtDisplay"
+                                            Label="更新日時"
+                                            Variant="Variant.Outlined"
+                                            ReadOnly="true"
+                                            Class="mb-3" />
+                            </MudItem>
+                        }
+
+                        <!-- アクションボタン -->
+                        <MudItem xs="12" Class="text-center mt-4">
+                            <MudStack Row Justify="Justify.Center" Spacing="3">
+                                <MudButton Variant="Variant.Outlined" 
+                                         Color="Color.Secondary" 
+                                         OnClick="Cancel"
+                                         StartIcon="@Icons.Material.Filled.Cancel">
+                                    キャンセル
+                                </MudButton>
+                                <MudButton Variant="Variant.Filled" 
+                                         Color="Color.Primary" 
+                                         ButtonType="ButtonType.Submit"
+                                         StartIcon="@Icons.Material.Filled.Save"
+                                         Disabled="@ViewModel.IsSaving">
+                                    @if (ViewModel.IsSaving)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                        <span class="ml-2">保存中...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(ViewModel.IsNewDepartment ? "作成" : "更新")</span>
+                                    }
+                                </MudButton>
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+    }
+    else if (ViewModel.IsLoading)
+    {
+        <div class="text-center py-4">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Class="mt-2">読み込み中...</MudText>
+        </div>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error">
+            指定された部門が見つかりません。
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    /// <summary>
+    /// 部署コードパラメータ（URL経由で取得）
+    /// "new" の場合は新規作成モード
+    /// </summary>
+    [Parameter] public string DepartmentCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 新規作成モードかどうかを判定
+    /// </summary>
+    private bool isNewDepartment => DepartmentCode == "new";
+
+    /// <summary>
+    /// 認証完了後の初期化処理
+    /// </summary>
+    protected override async Task OnAuthenticatedAsync()
+    {
+        await InitializeAsync();
+    }
+
+    /// <summary>
+    /// 画面初期化処理
+    /// ViewModelの初期化と必要データの読み込みを実行
+    /// </summary>
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            if (isNewDepartment)
+            {
+                // 新規作成モードの初期化
+                ViewModel.InitializeForNewDepartment();
+            }
+            else
+            {
+                // 編集モードの初期化
+                ViewModel.IsLoading = true;
+                var result = await DataService.GetDepartmentAsync(DepartmentCode);
+                
+                if (result.IsSuccess && result.Department != null)
+                {
+                    ViewModel.InitializeForEditDepartment(result.Department);
+                    
+                    // 責任者情報の復元
+                    await RestoreManagerInfoAsync();
+                }
+                else
+                {
+                    UIService.ShowError(result.ErrorMessage);
+                    ViewModel.CurrentDepartment = null;
+                    ViewModel.IsLoading = false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            UIService.ShowError($"画面初期化中にエラーが発生しました: {ex.Message}");
+            ViewModel.IsLoading = false;
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 責任者情報の復元処理（編集モード用）
+    /// </summary>
+    private async Task RestoreManagerInfoAsync()
+    {
+        if (ViewModel.CurrentDepartment?.ManagerEmployeeNumber == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var employee = await SearchService.GetByEmployeeNumberAsync(ViewModel.CurrentDepartment.ManagerEmployeeNumber);
+            if (employee != null)
+            {
+                ViewModel.SetManager(employee);
+            }
+        }
+        catch (Exception ex)
+        {
+            UIService.ShowWarning($"責任者情報の復元中にエラーが発生しました: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 責任者設定をクリア
+    /// </summary>
+    private void ClearManager()
+    {
+        ViewModel.ClearManager();
+        UIService.ShowInfo("責任者設定をクリアしました。");
+        StateHasChanged();
+    }
+
+
+    /// <summary>
+    /// 責任者選択時の処理
+    /// バリデーション付きで責任者を設定
+    /// </summary>
+    private async Task OnManagerSelectionChanged(Employee? manager)
+    {
+        try
+        {
+            if (manager != null)
+            {
+                // 責任者バリデーション実行
+                var validationResult = await ManagerValidationService.ValidateManagerAsync(manager.EmployeeNumber);
+                
+                if (validationResult.IsValid)
+                {
+                    ViewModel.SetManager(manager);
+                    
+                    if (validationResult.HasWarning)
+                    {
+                        UIService.ShowWarning(validationResult.WarningMessage);
+                    }
+                    else if (validationResult.HasSuccess)
+                    {
+                        UIService.ShowInfo(validationResult.SuccessMessage);
+                    }
+                }
+                else
+                {
+                    ViewModel.SetManagerValidationError(validationResult.ErrorMessage);
+                    UIService.ShowError(validationResult.ErrorMessage);
+                }
+            }
+            else
+            {
+                ViewModel.ClearManager();
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            UIService.ShowError($"責任者選択処理中にエラーが発生しました: {ex.Message}");
+        }
+    }
+
+
+    /// <summary>
+    /// 保存処理のメイン実行メソッド
+    /// 新しいサービス層を使用して簡素化
+    /// </summary>
+    private async Task HandleSave()
+    {
+        if (ViewModel.CurrentDepartment == null)
+        {
+            UIService.ShowError("保存対象のデータが設定されていません。");
+            return;
+        }
+
+        try
+        {
+            // 保存中状態に変更
+            ViewModel.IsSaving = true;
+            ViewModel.ClearFormErrors();
+            StateHasChanged();
+
+            // 保存前のデータ準備
+            ViewModel.PrepareForSave();
+
+            // データサービスを使用して保存処理実行
+            ValidationResult result;
+            if (ViewModel.IsNewDepartment)
+            {
+                result = await DataService.CreateDepartmentAsync(ViewModel.CurrentDepartment);
+            }
+            else
+            {
+                result = await DataService.UpdateDepartmentAsync(ViewModel.CurrentDepartment);
+            }
+
+            // 結果に基づいて処理
+            if (result.IsValid)
+            {
+                // 成功時の処理
+                var successMessage = result.SuccessMessage ?? 
+                    $"部門「{ViewModel.CurrentDepartment.DepartmentName}」の{(ViewModel.IsNewDepartment ? "作成" : "更新")}が完了しました。";
+                
+                await UIService.ShowSuccessAndNavigateAsync(successMessage, "/departments", DepartmentEditConstants.SUCCESS_MESSAGE_DELAY_MS);
+            }
+            else
+            {
+                // エラー時の処理
+                if (result.ErrorMessages.Any())
+                {
+                    UIService.ShowMultipleErrors(result.ErrorMessages, "保存処理でエラーが発生しました");
+                    
+                    // ViewModelにもエラーを設定
+                    foreach (var error in result.ErrorMessages)
+                    {
+                        ViewModel.AddFormError(error);
+                    }
+                }
+                else
+                {
+                    UIService.ShowError("保存処理が失敗しました。");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            UIService.ShowError($"保存処理中に予期しないエラーが発生しました: {ex.Message}");
+        }
+        finally
+        {
+            // 保存中状態を解除
+            ViewModel.IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// キャンセル処理
+    /// UIServiceを使用した統一的な画面遷移
+    /// </summary>
+    private void Cancel()
+    {
+        UIService.NavigateTo("/departments");
+    }
+}

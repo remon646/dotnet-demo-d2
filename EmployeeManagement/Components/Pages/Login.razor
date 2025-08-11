@@ -1,0 +1,197 @@
+@page "/login"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using EmployeeManagement.Application.Interfaces
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>ログイン - 社員情報管理システム</PageTitle>
+
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Elevation="4" Class="pa-8">
+        <MudGrid Justify="Justify.Center">
+            <MudItem xs="12" Class="text-center mb-6">
+                <MudText Typo="Typo.h4" Color="Color.Primary">
+                    社員情報管理システム
+                </MudText>
+                <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mt-2">
+                    ログイン
+                </MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudCard Elevation="0">
+                    <MudCardContent>
+                        <MudTextField @bind-Value="loginModel.UserId"
+                                    Label="ユーザーID"
+                                    Variant="Variant.Outlined"
+                                    Required="true"
+                                    MaxLength="20"
+                                    Class="mb-4"
+                                    Disabled="@isLoading"
+                                    @onkeypress="@(async (e) => { if (e.Key == "Enter") await HandleLogin(); })" />
+                        
+                        <MudTextField @bind-Value="loginModel.Password"
+                                    Label="パスワード"
+                                    Variant="Variant.Outlined"
+                                    InputType="InputType.Password"
+                                    Required="true"
+                                    MaxLength="20"
+                                    Class="mb-4"
+                                    Disabled="@isLoading"
+                                    @onkeypress="@(async (e) => { if (e.Key == "Enter") await HandleLogin(); })" />
+                    </MudCardContent>
+                    
+                    <MudCardActions Class="justify-center">
+                        <MudButton Variant="Variant.Filled"
+                                 Color="Color.Primary"
+                                 Size="Size.Large"
+                                 StartIcon="@Icons.Material.Filled.Login"
+                                 FullWidth="true"
+                                 Disabled="@isLoading"
+                                 @onclick="@HandleLogin">
+                            @if (isLoading)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                <MudText Class="ms-2">ログイン中...</MudText>
+                            }
+                            else
+                            {
+                                <MudText>ログイン</MudText>
+                            }
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" Class="text-center mt-4">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    デモ用アカウント: admin/password または user/password
+                </MudText>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginModel loginModel = new();
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Redirect if already authenticated
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            Console.WriteLine("=== HandleLogin method called! ===");
+            Console.WriteLine($"Blazor Server connection established and method executing");
+            
+            // Immediate user feedback
+            Snackbar.Add("ボタンがクリックされました！", Severity.Info);
+            
+            // Force a UI update to show the snackbar
+            await InvokeAsync(StateHasChanged);
+            
+            // Small delay to ensure UI update
+            await Task.Delay(100);
+            
+            // まずは単純なテスト
+            if (string.IsNullOrEmpty(loginModel.UserId))
+            {
+                loginModel.UserId = "admin";
+            }
+            if (string.IsNullOrEmpty(loginModel.Password))
+            {
+                loginModel.Password = "password";
+            }
+            
+            await PerformLogin();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in HandleLogin: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            Snackbar.Add($"HandleLogin error: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private async Task PerformLogin()
+    {
+        // Trim whitespace from input fields
+        loginModel.UserId = loginModel.UserId?.Trim() ?? "";
+        loginModel.Password = loginModel.Password?.Trim() ?? "";
+        
+        Console.WriteLine($"Debug - UserId: '{loginModel.UserId}', Password: '{loginModel.Password}'");
+        
+        if (string.IsNullOrWhiteSpace(loginModel.UserId) || string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            Console.WriteLine("Validation failed - empty fields");
+            Snackbar.Add("ユーザーIDとパスワードを入力してください。", Severity.Warning);
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            Console.WriteLine("Calling AuthService.LoginAsync");
+            var success = await AuthService.LoginAsync(loginModel.UserId, loginModel.Password);
+            Console.WriteLine($"Login result: {success}");
+            
+            if (success)
+            {
+                Console.WriteLine("Login successful - about to redirect");
+                
+                // 認証状態の確認
+                var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+                Console.WriteLine($"Authentication check after login: {isAuthenticated}");
+                
+                Snackbar.Add("ログインに成功しました。", Severity.Success);
+                
+                // 少し待ってからリダイレクト
+                await Task.Delay(500);
+                
+                Console.WriteLine("Now redirecting to home page");
+                // インメモリ認証なので直接ナビゲート可能
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                Console.WriteLine("Login failed - invalid credentials");
+                Snackbar.Add("ユーザーIDまたはパスワードが正しくありません。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in login: {ex.Message}");
+            Console.WriteLine($"Exception type: {ex.GetType().Name}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            Snackbar.Add($"ログイン処理中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            Console.WriteLine("Setting isLoading to false");
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    public class LoginModel
+    {
+        public string UserId { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}

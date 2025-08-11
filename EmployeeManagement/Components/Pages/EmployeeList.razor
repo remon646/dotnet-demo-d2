@@ -1,0 +1,267 @@
+@page "/employees"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@inherits AuthRequiredComponentBase
+@inject IEmployeeRepository EmployeeRepository
+@inject ISnackbar Snackbar
+
+<PageTitle>社員一覧 - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">
+        社員一覧
+    </MudText>
+
+    <!-- Search Form -->
+    <MudCard Elevation="4" Class="mb-4">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Class="mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
+                検索条件
+            </MudText>
+            
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="searchEmployeeNumber"
+                                Label="社員番号"
+                                Variant="Variant.Outlined"
+                                Placeholder="EMP2024001"
+                                Clearable="true"
+                                Class="mb-3" />
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="searchName"
+                                Label="氏名"
+                                Variant="Variant.Outlined"
+                                Placeholder="山田"
+                                Clearable="true"
+                                Class="mb-3" />
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="Department?" @bind-Value="searchDepartment"
+                             Label="部署"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Clearable="true">
+                        @foreach (Department dept in Enum.GetValues<Department>())
+                        {
+                            <MudSelectItem T="Department?" Value="@((Department?)dept)">@dept.ToDisplayName()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="Domain.Enums.Position?" @bind-Value="searchPosition"
+                             Label="役職"
+                             Variant="Variant.Outlined"
+                             Class="mb-3"
+                             Clearable="true">
+                        @foreach (Domain.Enums.Position pos in Enum.GetValues<Domain.Enums.Position>())
+                        {
+                            <MudSelectItem T="Domain.Enums.Position?" Value="@((Domain.Enums.Position?)pos)">@pos.ToDisplayName()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" Class="text-center">
+                    <MudButton Variant="Variant.Filled"
+                             Color="Color.Primary"
+                             StartIcon="@Icons.Material.Filled.Search"
+                             OnClick="SearchEmployees"
+                             Class="mr-3"
+                             Disabled="@isLoading">
+                        検索
+                    </MudButton>
+                    
+                    <MudButton Variant="Variant.Outlined"
+                             Color="Color.Secondary"
+                             StartIcon="@Icons.Material.Filled.Clear"
+                             OnClick="ClearSearch"
+                             Class="mr-3">
+                        クリア
+                    </MudButton>
+                    
+                    <MudButton Variant="Variant.Filled"
+                             Color="Color.Success"
+                             StartIcon="@Icons.Material.Filled.Add"
+                             OnClick="AddNewEmployee">
+                        新規追加
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- Employee List -->
+    <MudCard Elevation="4">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Class="mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.People" Class="mr-2" />
+                検索結果 (@employees.Count()件)
+            </MudText>
+
+            @if (isLoading)
+            {
+                <div class="text-center py-4">
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                    <MudText Class="mt-2">読み込み中...</MudText>
+                </div>
+            }
+            else
+            {
+                <MudDataGrid T="Employee" 
+                           Items="@employees" 
+                           Sortable="true" 
+                           Filterable="false"
+                           SortMode="SortMode.Single"
+                           Pageable="true"
+                           RowsPerPage="10"
+                           Dense="true"
+                           Hover="true"
+                           RowClick="@OnRowClick"
+                           RowClass="cursor-pointer">
+                    
+                    <Columns>
+                        <PropertyColumn Property="x => x.EmployeeNumber" Title="社員番号" />
+                        <PropertyColumn Property="x => x.Name" Title="氏名" />
+                        <PropertyColumn Property="x => x.CurrentDepartmentDisplayName" Title="部署" />
+                        <PropertyColumn Property="x => x.CurrentPositionDisplayName" Title="役職" />
+                        <PropertyColumn Property="x => x.JoinDate" Title="入社日" Format="yyyy/MM/dd" />
+                        <PropertyColumn Property="x => x.Email" Title="Email" />
+                        <TemplateColumn Title="操作" Sortable="false">
+                            <CellTemplate>
+                                <MudButton Size="Size.Small"
+                                         Variant="Variant.Filled"
+                                         Color="Color.Primary"
+                                         StartIcon="@Icons.Material.Filled.Edit"
+                                         OnClick="@(() => EditEmployee(context.Item.EmployeeNumber))"
+                                         Class="mr-2">
+                                    編集
+                                </MudButton>
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                    
+                    <PagerContent>
+                        <MudDataGridPager T="Employee" />
+                    </PagerContent>
+                </MudDataGrid>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private List<Employee> employees = new();
+    private bool isLoading = false;
+    
+    // Search parameters
+    private string searchEmployeeNumber = string.Empty;
+    private string searchName = string.Empty;
+    private Department? searchDepartment;
+    private Domain.Enums.Position? searchPosition;
+
+    private List<BreadcrumbItem> _breadcrumbItems = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("ホーム", href: "/", icon: Icons.Material.Filled.Home),
+        new BreadcrumbItem("社員一覧", href: "/employees", icon: Icons.Material.Filled.People)
+    };
+
+    protected override async Task OnAuthenticatedAsync()
+    {
+        await LoadAllEmployees();
+    }
+
+    private async Task LoadAllEmployees()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var allEmployees = await EmployeeRepository.GetAllAsync();
+            employees = allEmployees.OrderBy(e => e.EmployeeNumber).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"社員データの読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SearchEmployees()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var searchResults = await EmployeeRepository.SearchAsync(
+                string.IsNullOrWhiteSpace(searchEmployeeNumber) ? null : searchEmployeeNumber.Trim(),
+                string.IsNullOrWhiteSpace(searchName) ? null : searchName.Trim(),
+                searchDepartment,
+                searchPosition);
+                
+            employees = searchResults.ToList();
+            Snackbar.Add($"検索が完了しました。{employees.Count}件の結果が見つかりました。", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"検索中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchEmployeeNumber = string.Empty;
+        searchName = string.Empty;
+        searchDepartment = null;
+        searchPosition = null;
+        
+        await LoadAllEmployees();
+        Snackbar.Add("検索条件をクリアしました。", Severity.Info);
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<Employee> args)
+    {
+        EditEmployee(args.Item.EmployeeNumber);
+    }
+
+    private void EditEmployee(string employeeNumber)
+    {
+        Navigation.NavigateTo($"/employees/edit/{employeeNumber}");
+    }
+
+    private void AddNewEmployee()
+    {
+        Navigation.NavigateTo("/employees/edit/new");
+    }
+}
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    .cursor-pointer:hover {
+        background-color: var(--mud-palette-action-hover) !important;
+    }
+</style>

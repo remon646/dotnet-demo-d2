@@ -1,0 +1,561 @@
+@page "/employees/edit/{EmployeeNumber}"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Application.Services
+@using EmployeeManagement.Components
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@inherits AuthRequiredComponentBase
+@implements IAsyncDisposable
+@inject IEmployeeRepository EmployeeRepository
+@inject EmployeeNumberService EmployeeNumberService
+@inject ISnackbar Snackbar
+
+<PageTitle>@pageTitle - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">
+        @pageTitle
+    </MudText>
+
+    @if (currentEmployee != null)
+    {
+        
+        <MudCard Elevation="4">
+            <MudCardContent>
+                <EditForm Model="@currentEmployee" OnValidSubmit="@HandleSave" FormName="EmployeeForm">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" md="6">
+                            @if (isNewEmployee)
+                            {
+                                <MudTextField @bind-Value="currentEmployee.EmployeeNumber"
+                                            Label="社員番号（自動生成）"
+                                            Variant="Variant.Outlined"
+                                            ReadOnly="true"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.AutoAwesome"
+                                            AdornmentColor="Color.Success"
+                                            Class="mb-3"
+                                            HelperText="新規登録時は自動で採番されます" />
+                            }
+                            else
+                            {
+                                <MudTextField @bind-Value="currentEmployee.EmployeeNumber"
+                                            Label="社員番号"
+                                            Variant="Variant.Outlined"
+                                            ReadOnly="true"
+                                            Class="mb-3"
+                                            Disabled="@isLoading" />
+                            }
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="currentEmployee.Name"
+                                        Label="氏名"
+                                        Variant="Variant.Outlined"
+                                        Required="true"
+                                        MaxLength="50"
+                                        Class="mb-3"
+                                        Disabled="@isLoading" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="_selectedDepartment"
+                                     Label="部署"
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     Class="mb-3"
+                                     Disabled="@isLoading">
+                                @foreach (Department dept in Enum.GetValues<Department>())
+                                {
+                                    <MudSelectItem Value="@dept">@dept.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="_selectedPosition"
+                                     Label="役職"
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     Class="mb-3"
+                                     Disabled="@isLoading">
+                                @foreach (Domain.Enums.Position pos in Enum.GetValues<Domain.Enums.Position>())
+                                {
+                                    <MudSelectItem Value="@pos">@pos.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="joinDate"
+                                         Label="入社日"
+                                         Variant="Variant.Outlined"
+                                         Required="true"
+                                         Class="mb-3"
+                                         Disabled="@isLoading" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="currentEmployee.Email"
+                                        Label="Email"
+                                        Variant="Variant.Outlined"
+                                        Required="true"
+                                        MaxLength="100"
+                                        Class="mb-3"
+                                        Disabled="@isLoading"
+                                        InputType="InputType.Email" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="currentEmployee.PhoneNumber"
+                                        Label="電話番号"
+                                        Variant="Variant.Outlined"
+                                        MaxLength="15"
+                                        Class="mb-3"
+                                        Disabled="@isLoading"
+                                        InputType="InputType.Telephone" />
+                        </MudItem>
+
+                        <MudItem xs="12" Class="text-center mt-4">
+                            <MudButton ButtonType="ButtonType.Submit"
+                                     Variant="Variant.Filled"
+                                     Color="Color.Primary"
+                                     Size="Size.Large"
+                                     StartIcon="@Icons.Material.Filled.Save"
+                                     Class="mr-4"
+                                     Disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                    <MudText Class="ms-2">保存中...</MudText>
+                                }
+                                else
+                                {
+                                    <MudText>保存</MudText>
+                                }
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Outlined"
+                                     Color="Color.Secondary"
+                                     Size="Size.Large"
+                                     StartIcon="@Icons.Material.Filled.Cancel"
+                                     OnClick="@HandleCancel"
+                                     Disabled="@isLoading">
+                                キャンセル
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+    }
+    else if (isLoading)
+    {
+        <div class="text-center py-4">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText>社員データを読み込み中...</MudText>
+        </div>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning">
+            <MudText>指定された社員が見つかりません。</MudText>
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string EmployeeNumber { get; set; } = string.Empty;
+    
+    private Employee? currentEmployee;
+    private Employee? originalEmployee;
+    private bool isLoading = false;
+    private bool isNewEmployee = false;
+    private DateTime? joinDate;
+    private Department _selectedDepartment;
+    private Domain.Enums.Position _selectedPosition;
+    private string? _reservedEmployeeNumber;
+    private bool _hasValidReservation = false;
+    private readonly string _reservationId = Guid.NewGuid().ToString();
+    
+    private string pageTitle => isNewEmployee ? "新規社員登録" : "社員情報編集";
+
+    private List<BreadcrumbItem> _breadcrumbItems = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("ホーム", href: "/", icon: Icons.Material.Filled.Home),
+        new BreadcrumbItem("社員一覧", href: "/employees", icon: Icons.Material.Filled.People),
+        new BreadcrumbItem("編集", href: null, icon: Icons.Material.Filled.Edit)
+    };
+
+    private bool _isInitialized = false;
+
+    protected override async Task OnAuthenticatedAsync()
+    {
+        if (!_isInitialized)
+        {
+            await InitializeComponent();
+            _isInitialized = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Only run if not already initialized, or if the route parameter changed
+        if (!_isInitialized || 
+            (EmployeeNumber != null && isNewEmployee != EmployeeNumber.Equals("new", StringComparison.OrdinalIgnoreCase)))
+        {
+            await InitializeComponent();
+            _isInitialized = true;
+        }
+    }
+
+    private async Task InitializeComponent()
+    {
+        isNewEmployee = EmployeeNumber.Equals("new", StringComparison.OrdinalIgnoreCase);
+        
+        if (isNewEmployee)
+        {
+            await InitializeNewEmployeeAsync();
+        }
+        else
+        {
+            await LoadEmployeeData();
+        }
+    }
+
+    private async Task InitializeNewEmployeeAsync()
+    {
+        // Reset reservation state
+        _hasValidReservation = false;
+        _reservedEmployeeNumber = null;
+        
+        currentEmployee = new Employee
+        {
+            EmployeeNumber = string.Empty,
+            Name = string.Empty,
+            Email = string.Empty,
+            PhoneNumber = string.Empty,
+            JoinDate = DateTime.Today,
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now
+        };
+        
+        // Generate employee number preview
+        await GenerateEmployeeNumberPreview();
+        
+        originalEmployee = null;
+        joinDate = DateTime.Today;
+        _selectedDepartment = Department.Sales;
+        _selectedPosition = Domain.Enums.Position.General;
+        StateHasChanged();
+    }
+
+    private async Task GenerateEmployeeNumberPreview()
+    {
+        if (isNewEmployee && !_hasValidReservation)
+        {
+            try
+            {
+                _reservedEmployeeNumber = await EmployeeNumberService.ReserveEmployeeNumberAsync(
+                    year: DateTime.Now.Year, 
+                    reservedBy: _reservationId
+                );
+                
+                _hasValidReservation = true;
+                
+                if (currentEmployee != null)
+                {
+                    currentEmployee.EmployeeNumber = _reservedEmployeeNumber;
+                }
+                
+                StateHasChanged(); // Force UI update
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"社員番号の予約に失敗しました: {ex.Message}", Severity.Error);
+                if (currentEmployee != null)
+                {
+                    currentEmployee.EmployeeNumber = "予約失敗";
+                }
+            }
+        }
+    }
+
+    private async Task LoadEmployeeData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            var employee = await EmployeeRepository.GetByIdAsync(EmployeeNumber);
+            if (employee != null)
+            {
+                currentEmployee = new Employee
+                {
+                    EmployeeNumber = employee.EmployeeNumber,
+                    Name = employee.Name,
+                    JoinDate = employee.JoinDate,
+                    Email = employee.Email,
+                    PhoneNumber = employee.PhoneNumber,
+                    CreatedAt = employee.CreatedAt,
+                    UpdatedAt = employee.UpdatedAt,
+                    CurrentDepartmentHistory = employee.CurrentDepartmentHistory,
+                    DepartmentHistories = new List<DepartmentHistory>(employee.DepartmentHistories)
+                };
+                
+                originalEmployee = new Employee
+                {
+                    EmployeeNumber = employee.EmployeeNumber,
+                    Name = employee.Name,
+                    JoinDate = employee.JoinDate,
+                    Email = employee.Email,
+                    PhoneNumber = employee.PhoneNumber,
+                    CreatedAt = employee.CreatedAt,
+                    UpdatedAt = employee.UpdatedAt,
+                    CurrentDepartmentHistory = employee.CurrentDepartmentHistory,
+                    DepartmentHistories = new List<DepartmentHistory>(employee.DepartmentHistories)
+                };
+
+                joinDate = employee.JoinDate;
+                _selectedDepartment = employee.CurrentDepartment ?? Department.Sales;
+                _selectedPosition = employee.CurrentPosition ?? Domain.Enums.Position.General;
+            }
+            else
+            {
+                currentEmployee = null;
+                Snackbar.Add("指定された社員が見つかりません。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"社員データの読み込みに失敗しました: {ex.Message}", Severity.Error);
+            currentEmployee = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSave()
+    {
+        if (currentEmployee == null || isLoading) return; // Prevent double submission
+
+        // For new employees, validate reservation
+        if (isNewEmployee)
+        {
+            if (!_hasValidReservation || 
+                string.IsNullOrWhiteSpace(_reservedEmployeeNumber) ||
+                currentEmployee.EmployeeNumber != _reservedEmployeeNumber)
+            {
+                Snackbar.Add("社員番号の予約が無効です。画面を再読み込みしてください。", Severity.Error);
+                return;
+            }
+            
+            // Ensure we're using the reserved number
+            currentEmployee.EmployeeNumber = _reservedEmployeeNumber;
+        }
+        else
+        {
+            // Validate required fields for existing employees
+            if (string.IsNullOrWhiteSpace(currentEmployee.EmployeeNumber))
+            {
+                Snackbar.Add("社員番号を入力してください。", Severity.Warning);
+                return;
+            }
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentEmployee.Name))
+        {
+            Snackbar.Add("氏名を入力してください。", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(currentEmployee.Email))
+        {
+            Snackbar.Add("Emailを入力してください。", Severity.Warning);
+            return;
+        }
+
+        // Validate email format
+        if (!IsValidEmail(currentEmployee.Email))
+        {
+            Snackbar.Add("正しいメールアドレスを入力してください。", Severity.Warning);
+            return;
+        }
+
+
+        if (joinDate.HasValue)
+        {
+            currentEmployee.JoinDate = joinDate.Value;
+        }
+
+        // Set department history
+        currentEmployee.CurrentDepartmentHistory = new DepartmentHistory
+        {
+            HistoryId = currentEmployee.CurrentDepartmentHistory?.HistoryId ?? Guid.NewGuid().ToString(),
+            EmployeeNumber = currentEmployee.EmployeeNumber,
+            Department = _selectedDepartment,
+            Position = _selectedPosition,
+            StartDate = currentEmployee.CurrentDepartmentHistory?.StartDate ?? currentEmployee.JoinDate,
+            EndDate = null,
+            CreatedAt = currentEmployee.CurrentDepartmentHistory?.CreatedAt ?? DateTime.Now,
+            UpdatedAt = DateTime.Now
+        };
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            bool success;
+            if (isNewEmployee)
+            {
+                success = await EmployeeRepository.AddAsync(currentEmployee);
+                if (success)
+                {
+                    // Mark reservation as used immediately to prevent double submission issues
+                    _hasValidReservation = false;
+                    
+                    // Activate the reservation
+                    try
+                    {
+                        var activateResult = await EmployeeNumberService.ActivateReservationAsync(
+                            _reservedEmployeeNumber!, 
+                            currentEmployee.Name
+                        );
+                        
+                        if (!activateResult)
+                        {
+                            // This is expected behavior - don't show error to user
+                            // The reservation might have already been activated or cleaned up
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Log but don't fail - employee creation succeeded
+                        // Don't show this to user as it's not critical
+                    }
+                    
+                    Snackbar.Add("新規社員を登録しました。", Severity.Success);
+                    Navigation.NavigateTo("/employees");
+                }
+                else
+                {
+                    Snackbar.Add("社員の登録に失敗しました。", Severity.Error);
+                }
+            }
+            else
+            {
+                success = await EmployeeRepository.UpdateAsync(currentEmployee);
+                if (success)
+                {
+                    Snackbar.Add("社員情報を更新しました。", Severity.Success);
+                    Navigation.NavigateTo("/employees");
+                }
+                else
+                {
+                    Snackbar.Add("社員情報の更新に失敗しました。", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存処理中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        if (isNewEmployee && _hasValidReservation && !string.IsNullOrWhiteSpace(_reservedEmployeeNumber))
+        {
+            try
+            {
+                await EmployeeNumberService.ReleaseReservationAsync(_reservedEmployeeNumber);
+                _hasValidReservation = false;
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"予約解除に失敗しました: {ex.Message}", Severity.Warning);
+            }
+        }
+        
+        if (isNewEmployee)
+        {
+            Navigation.NavigateTo("/employees");
+        }
+        else if (originalEmployee != null && currentEmployee != null)
+        {
+            // Restore original values
+            currentEmployee.Name = originalEmployee.Name;
+            currentEmployee.JoinDate = originalEmployee.JoinDate;
+            currentEmployee.Email = originalEmployee.Email;
+            currentEmployee.PhoneNumber = originalEmployee.PhoneNumber;
+            
+            joinDate = originalEmployee.JoinDate;
+            _selectedDepartment = originalEmployee.CurrentDepartment ?? Department.Sales;
+            _selectedPosition = originalEmployee.CurrentPosition ?? Domain.Enums.Position.General;
+            
+            Snackbar.Add("編集内容を破棄しました。", Severity.Info);
+            Navigation.NavigateTo("/employees");
+        }
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsValidEmployeeNumber(string employeeNumber)
+    {
+        if (string.IsNullOrWhiteSpace(employeeNumber) || employeeNumber.Length != 10)
+            return false;
+            
+        if (!employeeNumber.StartsWith("EMP", StringComparison.OrdinalIgnoreCase))
+            return false;
+            
+        var yearPart = employeeNumber.Substring(3, 4);
+        var sequentialPart = employeeNumber.Substring(7, 3);
+        
+        return int.TryParse(yearPart, out var year) && year >= 2000 && year <= 9999 &&
+               int.TryParse(sequentialPart, out var seq) && seq >= 1 && seq <= 999;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hasValidReservation && !string.IsNullOrWhiteSpace(_reservedEmployeeNumber))
+        {
+            try
+            {
+                await EmployeeNumberService.ReleaseReservationAsync(_reservedEmployeeNumber);
+            }
+            catch
+            {
+                // Silent cleanup - best effort
+            }
+        }
+    }
+}

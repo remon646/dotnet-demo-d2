@@ -1,0 +1,236 @@
+@page "/departments"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components
+@using MudBlazor
+@inherits AuthRequiredComponentBase
+@inject IDepartmentRepository DepartmentRepository
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>部門マスタ管理 - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <MudGrid Spacing="4">
+        <!-- Header -->
+        <MudItem xs="12">
+            <MudGrid AlignItems="Center">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.h4" Color="Color.Primary">
+                        📊 部門マスタ管理
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" md="6" Class="text-right">
+                    <MudButton Variant="Variant.Filled"
+                             Color="Color.Primary"
+                             StartIcon="@Icons.Material.Filled.Add"
+                             OnClick="@CreateDepartment">
+                        新規追加
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <!-- Statistics Dashboard -->
+        <MudItem xs="12">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Color="Color.Primary">総部門数</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Primary">@totalDepartments</MudText>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Color="Color.Success">有効部門</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Success">@activeDepartments</MudText>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Warning" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Color="Color.Warning">責任者設定済</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Warning">@departmentsWithManager</MudText>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudCard Elevation="4" Class="pa-4 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Update" Size="Size.Large" Color="Color.Info" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Color="Color.Info">最終更新</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Info">@lastUpdateDate.ToString("yyyy/MM/dd")</MudText>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <!-- Data Grid -->
+        <MudItem xs="12">
+            <MudCard Elevation="4">
+                <MudCardContent>
+                    <MudDataGrid T="DepartmentMaster" Items="@departments" Loading="@isLoading" Filterable="true" SortMode="SortMode.Multiple" Groupable="false">
+                        <Columns>
+                            <PropertyColumn Property="x => x.DepartmentCode" Title="部署コード" />
+                            <PropertyColumn Property="x => x.DepartmentName" Title="部署名" />
+                            <PropertyColumn Property="x => x.ManagerName" Title="責任者" />
+                            <PropertyColumn Property="x => x.DepartmentTypeDisplayName" Title="部署区分" />
+                            <PropertyColumn Property="x => x.EstablishedDate" Title="設立日" Format="yyyy/MM/dd" />
+                            <PropertyColumn Property="x => x.IsActive" Title="状態">
+                                <CellTemplate>
+                                    @if (context.Item.IsActive)
+                                    {
+                                        <MudChip Color="Color.Success" Size="Size.Small">有効</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip Color="Color.Error" Size="Size.Small">無効</MudChip>
+                                    }
+                                </CellTemplate>
+                            </PropertyColumn>
+                            <TemplateColumn Title="操作" Sortable="false" Filterable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudButton Size="Size.Small"
+                                                 Variant="Variant.Filled"
+                                                 Color="Color.Primary"
+                                                 StartIcon="@Icons.Material.Filled.Edit"
+                                                 OnClick="@(() => EditDepartment(context.Item.DepartmentCode))"
+                                                 Class="mr-2">
+                                            編集
+                                        </MudButton>
+                                        <MudButton Size="Size.Small"
+                                                 Variant="Variant.Filled"
+                                                 Color="Color.Error"
+                                                 StartIcon="@Icons.Material.Filled.Delete"
+                                                 OnClick="@(() => DeleteDepartment(context.Item))">
+                                            削除
+                                        </MudButton>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                        </Columns>
+                    </MudDataGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private List<DepartmentMaster> departments = new();
+    private bool isLoading = true;
+    
+    // Statistics
+    private int totalDepartments = 0;
+    private int activeDepartments = 0;
+    private int departmentsWithManager = 0;
+    private DateTime lastUpdateDate = DateTime.MinValue;
+
+    private List<BreadcrumbItem> _breadcrumbItems = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("ホーム", href: "/", icon: Icons.Material.Filled.Home),
+        new BreadcrumbItem("部門マスタ管理", href: "/departments", icon: Icons.Material.Filled.Business)
+    };
+
+    protected override async Task OnAuthenticatedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            // 編集画面から戻ってきた時にデータを再読み込み
+            await LoadData();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        
+        try
+        {
+            departments = (await DepartmentRepository.GetAllAsync()).ToList();
+            await LoadStatistics();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"データの読み込みに失敗しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        totalDepartments = await DepartmentRepository.GetCountAsync();
+        activeDepartments = await DepartmentRepository.GetActiveCountAsync();
+        departmentsWithManager = await DepartmentRepository.GetWithManagerCountAsync();
+        lastUpdateDate = await DepartmentRepository.GetLastUpdateDateAsync();
+    }
+
+    private void CreateDepartment()
+    {
+        NavigationManager.NavigateTo("/departments/edit/new");
+    }
+
+    private void EditDepartment(string departmentCode)
+    {
+        NavigationManager.NavigateTo($"/departments/edit/{departmentCode}");
+    }
+
+    private async Task DeleteDepartment(DepartmentMaster department)
+    {
+        // Check if employees are assigned to this department
+        var employees = await EmployeeRepository.GetAllAsync();
+        var employeesInDepartment = employees.Count(e => e.CurrentDepartment == department.DepartmentType);
+
+        if (employeesInDepartment > 0)
+        {
+            Snackbar.Add($"この部署には {employeesInDepartment} 名の社員が所属しているため削除できません。", Severity.Warning);
+            return;
+        }
+
+        var confirm = await DialogService.ShowMessageBox(
+            "部門削除の確認",
+            $"部門「{department.DepartmentName}」を削除しますか？この操作は取り消せません。",
+            yesText: "削除", cancelText: "キャンセル");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var success = await DepartmentRepository.DeleteAsync(department.DepartmentCode);
+                if (success)
+                {
+                    await LoadData();
+                    Snackbar.Add("部門を削除しました。", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("部門の削除に失敗しました。", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"削除処理中にエラーが発生しました: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

@@ -1,0 +1,144 @@
+@page "/"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components
+@using MudBlazor
+@inherits AuthRequiredComponentBase
+@inject IEmployeeRepository EmployeeRepository
+@inject IDepartmentRepository DepartmentRepository
+
+<PageTitle>ホーム - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-6 text-center">
+        ようこそ、社員情報管理システムへ
+    </MudText>
+    
+    <MudGrid Spacing="6" Justify="Justify.Center" Class="dashboard-grid">
+        <!-- システム概要カード -->
+        <MudItem xs="12" sm="6" md="6" Class="fade-in-card" Style="animation-delay: 0.1s;">
+            <MudCard Elevation="0" Class="modern-card overview-card">
+                <MudCardContent Class="text-center pa-6">
+                    <div class="card-icon-container mb-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Large" Class="card-icon" Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.h5" Class="card-title mb-3">
+                        システム概要
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="card-subtitle mb-4">
+                        現在の登録データ
+                    </MudText>
+                    <div class="stats-container">
+                        <div class="stat-item">
+                            <MudText Typo="Typo.h6" Class="stat-number">@employeeCount</MudText>
+                            <MudText Typo="Typo.caption" Class="stat-label">社員</MudText>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat-item">
+                            <MudText Typo="Typo.h6" Class="stat-number">@departmentCount</MudText>
+                            <MudText Typo="Typo.caption" Class="stat-label">部署</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- 登録社員数カード -->
+        <MudItem xs="12" sm="6" md="6" Class="fade-in-card" Style="animation-delay: 0.2s;">
+            <MudCard Elevation="0" Class="modern-card employee-card">
+                <MudCardContent Class="text-center pa-6">
+                    <div class="card-icon-container mb-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Large" Class="card-icon" Color="Color.Success" />
+                    </div>
+                    <MudText Typo="Typo.h5" Class="card-title mb-3">
+                        登録社員数
+                    </MudText>
+                    <MudText Typo="Typo.h2" Class="employee-count mb-3">
+                        @employeeCount<span class="count-unit">名</span>
+                    </MudText>
+                    <div class="progress-container mb-3">
+                        <MudProgressLinear Color="Color.Success" Value="@GetEmployeeProgress()" 
+                                         Class="modern-progress" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.caption" Class="date-label">
+                        @DateTime.Now.ToString("yyyy年M月") 現在
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- 社員マスタ管理カード -->
+        <MudItem xs="12" sm="6" md="6" Class="fade-in-card" Style="animation-delay: 0.3s;">
+            <MudCard Elevation="0" Class="modern-card action-card employee-management" @onclick="NavigateToEmployees">
+                <MudCardContent Class="text-center pa-6">
+                    <div class="card-icon-container mb-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Class="card-icon" Color="Color.Warning" />
+                    </div>
+                    <MudText Typo="Typo.h5" Class="card-title mb-3">
+                        社員マスタ管理
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="card-description">
+                        社員情報の参照・編集
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- 部門マスタ管理カード -->
+        <MudItem xs="12" sm="6" md="6" Class="fade-in-card" Style="animation-delay: 0.4s;">
+            <MudCard Elevation="0" Class="modern-card action-card department-management" @onclick="NavigateToDepartments">
+                <MudCardContent Class="text-center pa-6">
+                    <div class="card-icon-container mb-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Class="card-icon" Color="Color.Info" />
+                    </div>
+                    <MudText Typo="Typo.h5" Class="card-title mb-3">
+                        部門マスタ管理
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="card-description">
+                        部署情報の管理
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+
+@code {
+    private int employeeCount = 0;
+    private int departmentCount = 0;
+
+    private List<BreadcrumbItem> _breadcrumbItems = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("ホーム", href: "/", icon: Icons.Material.Filled.Home)
+    };
+
+    protected override async Task OnAuthenticatedAsync()
+    {
+        await LoadStatistics();
+    }
+
+    private async Task LoadStatistics()
+    {
+        employeeCount = await EmployeeRepository.GetCountAsync();
+        departmentCount = await DepartmentRepository.GetCountAsync();
+    }
+
+    private double GetEmployeeProgress()
+    {
+        // For demo purposes, show progress based on employee count (max 10)
+        return Math.Min((double)employeeCount / 10.0 * 100, 100);
+    }
+
+    private void NavigateToEmployees()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+
+    private void NavigateToDepartments()
+    {
+        Navigation.NavigateTo("/departments");
+    }
+}
