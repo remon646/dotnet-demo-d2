@@ -1,0 +1,275 @@
+@page "/employees/delete/{EmployeeNumber}"
+@using EmployeeManagement.Domain.Interfaces
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@inherits AuthRequiredComponentBase
+@inject IEmployeeRepository EmployeeRepository
+@inject IEmployeeDeleteService EmployeeDeleteService
+@inject ISnackbar Snackbar
+
+<PageTitle>社員削除確認 - 社員情報管理システム</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbItems" />
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudText Typo="Typo.h4" Color="Color.Error" Class="mb-4">
+        社員削除確認
+    </MudText>
+
+    @if (currentEmployee != null)
+    {
+        <MudCard Elevation="4">
+            <MudCardContent>
+                <MudAlert Severity="Severity.Warning" Class="mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" />
+                        削除の確認
+                    </MudText>
+                    <MudText>
+                        以下の社員情報を削除しようとしています。この操作は取り消せません。<br/>
+                        内容をよく確認してから削除を実行してください。
+                    </MudText>
+                </MudAlert>
+                
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.EmployeeNumber"
+                                    Label="社員番号"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.Name"
+                                    Label="氏名"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.CurrentDepartmentDisplayName"
+                                    Label="部署"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.CurrentPositionDisplayName"
+                                    Label="役職"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.JoinDate.ToString("yyyy年MM月dd日")"
+                                    Label="入社日"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@currentEmployee.Email"
+                                    Label="Email"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField Value="@(currentEmployee.PhoneNumber ?? "未設定")"
+                                    Label="電話番号"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="true"
+                                    Class="mb-3" />
+                    </MudItem>
+
+                    <MudItem xs="12" Class="text-center mt-4">
+                        <MudButton Variant="Variant.Filled"
+                                 Color="Color.Error"
+                                 Size="Size.Large"
+                                 StartIcon="@Icons.Material.Filled.Delete"
+                                 Class="mr-4"
+                                 OnClick="@HandleDelete"
+                                 Disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                <MudText Class="ms-2">削除中...</MudText>
+                            }
+                            else
+                            {
+                                <MudText>削除する</MudText>
+                            }
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                 Color="Color.Secondary"
+                                 Size="Size.Large"
+                                 StartIcon="@Icons.Material.Filled.Cancel"
+                                 OnClick="@HandleCancel"
+                                 Disabled="@isLoading">
+                            キャンセル
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    }
+    else if (isLoading)
+    {
+        <div class="text-center py-4">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText>社員データを読み込み中...</MudText>
+        </div>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning">
+            <MudText>指定された社員が見つかりません。</MudText>
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    /// <summary>
+    /// ルートパラメータで受け取る社員番号
+    /// </summary>
+    [Parameter] public string EmployeeNumber { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// 削除対象の社員情報
+    /// </summary>
+    private Employee? currentEmployee;
+    
+    /// <summary>
+    /// 読み込み中フラグ
+    /// </summary>
+    private bool isLoading = false;
+
+    /// <summary>
+    /// パンくずリスト設定
+    /// </summary>
+    private List<BreadcrumbItem> _breadcrumbItems = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("ホーム", href: "/", icon: Icons.Material.Filled.Home),
+        new BreadcrumbItem("社員一覧", href: "/employees", icon: Icons.Material.Filled.People),
+        new BreadcrumbItem("削除確認", href: null, icon: Icons.Material.Filled.Delete)
+    };
+
+    /// <summary>
+    /// 初期化フラグ
+    /// </summary>
+    private bool _isInitialized = false;
+
+    /// <summary>
+    /// 認証後の初期化処理
+    /// </summary>
+    protected override async Task OnAuthenticatedAsync()
+    {
+        if (!_isInitialized)
+        {
+            await LoadEmployeeData();
+            _isInitialized = true;
+        }
+    }
+
+    /// <summary>
+    /// パラメータ変更時の処理
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_isInitialized)
+        {
+            await LoadEmployeeData();
+            _isInitialized = true;
+        }
+    }
+
+    /// <summary>
+    /// 社員データの読み込み処理
+    /// 削除確認画面では読み取り専用で表示
+    /// </summary>
+    private async Task LoadEmployeeData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            var employee = await EmployeeRepository.GetByIdAsync(EmployeeNumber);
+            if (employee != null)
+            {
+                currentEmployee = employee;
+            }
+            else
+            {
+                currentEmployee = null;
+                Snackbar.Add("指定された社員が見つかりません。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"社員データの読み込みに失敗しました: {ex.Message}", Severity.Error);
+            currentEmployee = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 削除実行処理
+    /// EmployeeDeleteServiceを使用して安全に削除を実行
+    /// </summary>
+    private async Task HandleDelete()
+    {
+        if (currentEmployee == null || isLoading) return;
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // 削除サービスを使用して安全に削除実行
+            var result = await EmployeeDeleteService.DeleteEmployeeAsync(currentEmployee.EmployeeNumber);
+            
+            if (result.IsSuccess)
+            {
+                Snackbar.Add($"社員「{currentEmployee.Name}」を削除しました。", Severity.Success);
+                Navigation.NavigateTo("/employees");
+            }
+            else
+            {
+                Snackbar.Add($"削除に失敗しました: {result.Error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"削除処理中にエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// キャンセル処理
+    /// 社員一覧画面に戻る
+    /// </summary>
+    private void HandleCancel()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+}

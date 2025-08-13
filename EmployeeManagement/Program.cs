@@ -46,6 +46,9 @@ builder.Services.AddScoped<EmployeeManagement.Application.Interfaces.IAuthentica
 builder.Services.AddScoped<EmployeeNumberService>();
 builder.Services.AddScoped<DepartmentHistoryService>();
 
+// Register employee delete service - 社員削除機能
+builder.Services.AddScoped<IEmployeeDeleteService, EmployeeDeleteService>();
+
 // Register new application services - 部門編集機能の疎結合サービス
 // バリデーションサービス
 builder.Services.AddScoped<IManagerValidationService, ManagerValidationService>();

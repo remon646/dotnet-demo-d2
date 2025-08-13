@@ -139,14 +139,23 @@
                         <PropertyColumn Property="x => x.Email" Title="Email" />
                         <TemplateColumn Title="操作" Sortable="false">
                             <CellTemplate>
-                                <MudButton Size="Size.Small"
-                                         Variant="Variant.Filled"
-                                         Color="Color.Primary"
-                                         StartIcon="@Icons.Material.Filled.Edit"
-                                         OnClick="@(() => EditEmployee(context.Item.EmployeeNumber))"
-                                         Class="mr-2">
-                                    編集
-                                </MudButton>
+                                <MudStack Row>
+                                    <MudButton Size="Size.Small"
+                                             Variant="Variant.Filled"
+                                             Color="Color.Primary"
+                                             StartIcon="@Icons.Material.Filled.Edit"
+                                             OnClick="@(() => EditEmployee(context.Item.EmployeeNumber))"
+                                             Class="mr-2">
+                                        編集
+                                    </MudButton>
+                                    <MudButton Size="Size.Small"
+                                             Variant="Variant.Filled"
+                                             Color="Color.Error"
+                                             StartIcon="@Icons.Material.Filled.Delete"
+                                             OnClick="@(() => DeleteEmployee(context.Item.EmployeeNumber))">
+                                        削除
+                                    </MudButton>
+                                </MudStack>
                             </CellTemplate>
                         </TemplateColumn>
                     </Columns>
@@ -253,6 +262,16 @@
     private void AddNewEmployee()
     {
         Navigation.NavigateTo("/employees/edit/new");
+    }
+
+    /// <summary>
+    /// 社員削除確認画面に遷移する
+    /// 社員の詳細情報を読み取り専用で表示し、削除確認を行う
+    /// </summary>
+    /// <param name="employeeNumber">削除対象の社員番号</param>
+    private void DeleteEmployee(string employeeNumber)
+    {
+        Navigation.NavigateTo($"/employees/delete/{employeeNumber}");
     }
 }
 
