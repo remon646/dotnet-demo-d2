@@ -39,5 +39,6 @@
   "enabledMcpjsonServers": [
     "playwright",
     "context7"
-  ]
+  ],
+  "enableAllProjectMcpServers": true
 }

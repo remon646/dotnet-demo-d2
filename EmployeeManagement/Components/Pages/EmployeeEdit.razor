@@ -12,6 +12,7 @@
 @inject IEmployeeRepository EmployeeRepository
 @inject EmployeeNumberService EmployeeNumberService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>@pageTitle - 社員情報管理システム</PageTitle>
 
@@ -348,6 +349,25 @@
     }
 
     private async Task HandleSave()
+    {
+        if (currentEmployee == null || isLoading) return;
+
+        // 確認ダイアログを表示
+        var message = isNewEmployee ? "新規社員を登録しますか？" : "社員情報を更新しますか？";
+        var title = isNewEmployee ? "登録確認" : "更新確認";
+        
+        var confirm = await DialogService.ShowMessageBox(
+            title,
+            message,
+            yesText: "はい", cancelText: "いいえ");
+            
+        if (confirm == true)
+        {
+            await HandleSaveInternal();
+        }
+    }
+
+    private async Task HandleSaveInternal()
     {
         if (currentEmployee == null || isLoading) return; // Prevent double submission
 
