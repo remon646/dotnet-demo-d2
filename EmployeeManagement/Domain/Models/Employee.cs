@@ -24,6 +24,11 @@ public class Employee
     [StringLength(15)]
     public string? PhoneNumber { get; set; }
 
+    /// <summary>
+    /// 退職日（未退職の場合はnull）
+    /// </summary>
+    public DateTime? RetirementDate { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
@@ -56,4 +61,14 @@ public class Employee
     /// 現在の役職表示名
     /// </summary>
     public string CurrentPositionDisplayName => CurrentDepartmentHistory?.PositionDisplayName ?? "未設定";
+
+    /// <summary>
+    /// 退職しているかどうか
+    /// </summary>
+    public bool IsRetired => RetirementDate.HasValue && RetirementDate.Value <= DateTime.Today;
+
+    /// <summary>
+    /// 退職状況の表示テキスト
+    /// </summary>
+    public string RetirementStatusDisplayText => IsRetired ? "退職済み" : "在職中";
 }

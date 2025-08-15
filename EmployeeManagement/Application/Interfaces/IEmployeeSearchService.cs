@@ -14,6 +14,7 @@ public interface IEmployeeSearchService
     /// </summary>
     /// <param name="keyword">検索キーワード（社員番号または氏名）</param>
     /// <param name="maxResults">最大結果件数</param>
+    /// <param name="includeRetired">退職者を含むかどうか（デフォルト: false）</param>
     /// <param name="cancellationToken">キャンセレーショントークン</param>
     /// <returns>
     /// 検索結果の社員リスト
@@ -26,10 +27,12 @@ public interface IEmployeeSearchService
     /// 2. 結果件数制限によるパフォーマンス最適化
     /// 3. キャンセレーション対応でリアルタイム検索に適用
     /// 4. 大文字小文字を区別しない検索
+    /// 5. 退職者フィルタリング対応
     /// </remarks>
     Task<IEnumerable<Employee>> SearchForAutocompleteAsync(
         string keyword, 
         int maxResults = 10, 
+        bool includeRetired = false,
         CancellationToken cancellationToken = default);
     
     /// <summary>
@@ -126,6 +129,9 @@ public class EmployeeSearchCriteria
     
     /// <summary>有効な社員のみ検索するフラグ</summary>
     public bool ActiveOnly { get; set; } = true;
+
+    /// <summary>退職者を検索結果に含めるフラグ</summary>
+    public bool IncludeRetired { get; set; } = false;
     
     /// <summary>
     /// 検索条件が空かどうかを判定

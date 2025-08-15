@@ -1,0 +1,162 @@
+@page "/retired-toggle-test"
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Components.Shared
+
+<PageTitle>退職者切り替え機能テスト</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">退職者切り替え機能テスト</MudText>
+    
+    <MudGrid Spacing="4">
+        <!-- 従来方式（分離表示） -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">分離表示（Separate）</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <EmployeeSelectorComponent 
+                        @bind-SelectedEmployee="selectedEmployee1"
+                        RetiredTogglePosition="RetiredTogglePosition.Separate"
+                        Label="社員選択（分離表示）"
+                        ShowSelectedEmployeeInfo="true" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- インライン表示 -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">インライン表示（Inline）</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <EmployeeSelectorComponent 
+                        @bind-SelectedEmployee="selectedEmployee2"
+                        RetiredTogglePosition="RetiredTogglePosition.Inline"
+                        Label="社員選択（インライン表示）"
+                        ShowSelectedEmployeeInfo="true" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- 従来方式（後方互換性テスト） -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">従来方式（互換性テスト）</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <EmployeeSelectorComponent 
+                        @bind-SelectedEmployee="selectedEmployee3"
+                        ShowRetiredToggle="true"
+                        Label="社員選択（従来方式）"
+                        ShowSelectedEmployeeInfo="true" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- 表示なし -->
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">退職者スイッチなし</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <EmployeeSelectorComponent 
+                        @bind-SelectedEmployee="selectedEmployee4"
+                        RetiredTogglePosition="RetiredTogglePosition.None"
+                        Label="社員選択（スイッチなし）"
+                        ShowSelectedEmployeeInfo="true" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- 選択結果表示 -->
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">選択結果</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="3">
+                    <MudText><strong>分離表示:</strong></MudText>
+                    <MudText>@(selectedEmployee1?.Name ?? "未選択")</MudText>
+                    @if (selectedEmployee1?.IsRetired == true)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning" Text="退職済み" />
+                    }
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudText><strong>インライン表示:</strong></MudText>
+                    <MudText>@(selectedEmployee2?.Name ?? "未選択")</MudText>
+                    @if (selectedEmployee2?.IsRetired == true)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning" Text="退職済み" />
+                    }
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudText><strong>従来方式:</strong></MudText>
+                    <MudText>@(selectedEmployee3?.Name ?? "未選択")</MudText>
+                    @if (selectedEmployee3?.IsRetired == true)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning" Text="退職済み" />
+                    }
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudText><strong>スイッチなし:</strong></MudText>
+                    <MudText>@(selectedEmployee4?.Name ?? "未選択")</MudText>
+                    @if (selectedEmployee4?.IsRetired == true)
+                    {
+                        <MudChip Size="Size.Small" Color="Color.Warning" Text="退職済み" />
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- 使用方法 -->
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">使用方法</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText Class="mb-2"><strong>新しいRetiredTogglePositionパラメータ:</strong></MudText>
+            <MudList>
+                <MudListItem>
+                    <code>RetiredTogglePosition.None</code> - 退職者スイッチを非表示
+                </MudListItem>
+                <MudListItem>
+                    <code>RetiredTogglePosition.Separate</code> - 独立したカードで表示（推奨）
+                </MudListItem>
+                <MudListItem>
+                    <code>RetiredTogglePosition.Inline</code> - AutoCompleteと同一行に表示（コンパクト）
+                </MudListItem>
+            </MudList>
+            
+            <MudText Class="mt-4 mb-2"><strong>後方互換性:</strong></MudText>
+            <MudText>既存の<code>ShowRetiredToggle="true"</code>は引き続き動作します（Separateモードとして扱われます）</MudText>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private Employee? selectedEmployee1;
+    private Employee? selectedEmployee2;
+    private Employee? selectedEmployee3;
+    private Employee? selectedEmployee4;
+}

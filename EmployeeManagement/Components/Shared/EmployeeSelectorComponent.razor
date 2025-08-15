@@ -57,6 +57,23 @@
         </MudAutocomplete>
     }
 
+    @* インライン表示の場合 *@
+    @if (EffectiveRetiredTogglePosition == RetiredTogglePosition.Inline)
+    {
+        <div class="d-flex align-center mt-2 @EmployeeSelectorCssClasses.RETIRED_TOGGLE_INLINE">
+            <div class="flex-grow-1"></div>
+            @RetiredToggleTemplate
+        </div>
+    }
+
+    @* 分離表示の場合（従来方式） *@
+    @if (EffectiveRetiredTogglePosition == RetiredTogglePosition.Separate)
+    {
+        <MudCard Elevation="0" Class="mt-2 pa-2">
+            @RetiredToggleTemplate
+        </MudCard>
+    }
+
     @if (ShowSelectedEmployeeInfo && SelectedEmployee != null)
     {
         <MudCard Elevation="2" Class="mt-2">
@@ -164,6 +181,45 @@
     [Parameter] public int MinSearchLength { get; set; } = EmployeeSelectorConstants.DEFAULT_MIN_SEARCH_LENGTH;
 
     /// <summary>
+    /// 退職者を検索結果に含めるかどうか
+    /// </summary>
+    [Parameter] public bool IncludeRetired { get; set; } = false;
+
+    /// <summary>
+    /// 退職者切り替えスイッチを表示するかどうか（後方互換性のため残す）
+    /// </summary>
+    [Parameter] public bool ShowRetiredToggle { get; set; } = false;
+
+    /// <summary>
+    /// 退職者切り替えスイッチの表示位置
+    /// </summary>
+    [Parameter] public RetiredTogglePosition RetiredTogglePosition { get; set; } = RetiredTogglePosition.None;
+
+    /// <summary>
+    /// 実際の退職者スイッチ表示位置（ShowRetiredToggleとの統合制御）
+    /// </summary>
+    private RetiredTogglePosition EffectiveRetiredTogglePosition => 
+        RetiredTogglePosition != RetiredTogglePosition.None 
+            ? RetiredTogglePosition 
+            : ShowRetiredToggle 
+                ? RetiredTogglePosition.Separate 
+                : RetiredTogglePosition.None;
+
+    /// <summary>
+    /// 退職者切り替えスイッチのテンプレート（再利用可能）
+    /// </summary>
+    private RenderFragment RetiredToggleTemplate => __builder =>
+    {
+        var size = EffectiveRetiredTogglePosition == RetiredTogglePosition.Adornment ? Size.Small : Size.Small;
+        var label = EffectiveRetiredTogglePosition == RetiredTogglePosition.Adornment ? "退職者" : "退職者を含む";
+        
+        <MudSwitch T="bool" @bind-Checked="IncludeRetired" 
+                   Label="@label" 
+                   Color="Color.Primary"
+                   Size="@size" />
+    };
+
+    /// <summary>
     /// 社員アイテムテンプレートの共通実装
     /// </summary>
     /// <param name="employee">表示する社員</param>
@@ -172,9 +228,15 @@
     {
         <div class="d-flex align-center">
             <div class="flex-grow-1">
-                <MudText Typo="Typo.subtitle2">@employee.EmployeeNumber</MudText>
+                <MudText Typo="Typo.subtitle2" Style="@(employee.IsRetired ? "color: gray; text-decoration: line-through;" : "")">
+                    @employee.EmployeeNumber
+                </MudText>
                 <MudText Typo="Typo.caption" Style="color: gray;">
                     @employee.Name - @employee.CurrentDepartmentDisplayName
+                    @if (employee.IsRetired)
+                    {
+                        <span style="color: #f44336;"> (退職済み)</span>
+                    }
                 </MudText>
             </div>
             @if (Mode == EmployeeSelectorMode.ManagerOnly)
@@ -182,6 +244,11 @@
                 <MudChip T="string" Size="Size.Small" Color="Color.Info" 
                          Variant="Variant.Text" Text="責任者候補" 
                          Class="@EmployeeSelectorCssClasses.MANAGER_CANDIDATE_CHIP" />
+            }
+            @if (employee.IsRetired)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" 
+                         Variant="Variant.Text" Text="退職済み" />
             }
         </div>
     };
@@ -208,7 +275,7 @@
                 EmployeeSelectorMode.ManagerOnly => 
                     await EmployeeSearchService.SearchEligibleManagersAsync(value, MaxAutocompleteResults, cancellationToken),
                 EmployeeSelectorMode.Standard or EmployeeSelectorMode.AutocompleteOnly => 
-                    await EmployeeSearchService.SearchForAutocompleteAsync(value, MaxAutocompleteResults, cancellationToken),
+                    await EmployeeSearchService.SearchForAutocompleteAsync(value, MaxAutocompleteResults, IncludeRetired, cancellationToken),
                 _ => Enumerable.Empty<Employee>()
             };
         }
@@ -239,6 +306,7 @@
     {
         await OnEmployeeSelectionChanged(null);
     }
+
 
     /// <summary>
     /// 検索ダイアログを開く

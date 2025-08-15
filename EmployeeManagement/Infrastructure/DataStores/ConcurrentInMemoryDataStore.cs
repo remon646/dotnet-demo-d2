@@ -138,7 +138,7 @@ public class ConcurrentInMemoryDataStore
         employee1.DepartmentHistories.Add(employee1.CurrentDepartmentHistory);
         _employees.TryAdd("EMP2024001", employee1);
 
-        // Employee 2
+        // Employee 2 (退職済み)
         var employee2 = new Employee
         {
             EmployeeNumber = "EMP2024002",
@@ -146,6 +146,7 @@ public class ConcurrentInMemoryDataStore
             JoinDate = new DateTime(2024, 4, 1),
             Email = "sato@company.com",
             PhoneNumber = "03-1234-5679",
+            RetirementDate = new DateTime(2024, 12, 31), // 退職日を追加
             CreatedAt = DateTime.Now.AddMonths(-3),
             UpdatedAt = DateTime.Now.AddDays(-2)
         };
@@ -346,7 +347,7 @@ public class ConcurrentInMemoryDataStore
         employee9.DepartmentHistories.Add(employee9.CurrentDepartmentHistory);
         _employees.TryAdd("EMP2024009", employee9);
 
-        // Employee 10
+        // Employee 10 (退職済み)
         var employee10 = new Employee
         {
             EmployeeNumber = "EMP2024010",
@@ -354,6 +355,7 @@ public class ConcurrentInMemoryDataStore
             JoinDate = new DateTime(2023, 12, 1),
             Email = "kobayashi@company.com",
             PhoneNumber = "03-1234-5687",
+            RetirementDate = new DateTime(2024, 11, 30), // 退職日を追加
             CreatedAt = DateTime.Now.AddMonths(-7),
             UpdatedAt = DateTime.Now.AddDays(-2)
         };

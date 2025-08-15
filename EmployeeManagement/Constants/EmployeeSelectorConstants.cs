@@ -45,4 +45,13 @@ public static class EmployeeSelectorCssClasses
     
     /// <summary>コンパクトセレクターのCSSクラス</summary>
     public const string COMPACT_SELECTOR = "employee-selector-compact";
+    
+    /// <summary>退職者スイッチのインライン表示用CSSクラス</summary>
+    public const string RETIRED_TOGGLE_INLINE = "retired-toggle-inline";
+    
+    /// <summary>退職者スイッチのAdornment表示用CSSクラス</summary>
+    public const string RETIRED_TOGGLE_ADORNMENT = "retired-toggle-adornment";
+    
+    /// <summary>Adornmentコンテナのレスポンシブ用CSSクラス</summary>
+    public const string ADORNMENT_CONTAINER = "employee-selector-adornment";
 }

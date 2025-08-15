@@ -63,6 +63,11 @@
                                 }
                             </MudSelect>
                         </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSwitch T="bool" @bind-Checked="searchCriteria.IncludeRetired"
+                                     Label="退職者を含む"
+                                     Color="Color.Primary" />
+                        </MudItem>
                         <MudItem xs="12" Class="text-center">
                             <MudButton Variant="Variant.Filled"
                                      Color="Color.Primary"
@@ -237,7 +242,8 @@
                 {
                     EmployeeNumber = searchCriteria.EmployeeNumber,
                     Name = searchCriteria.Name,
-                    ActiveOnly = true
+                    ActiveOnly = true,
+                    IncludeRetired = searchCriteria.IncludeRetired
                 };
 
                 if (criteria.IsEmpty)
@@ -246,7 +252,8 @@
                     var allEmployees = await EmployeeRepository.GetAllAsync();
                     searchResults = allEmployees.Where(emp =>
                         (!searchCriteria.Department.HasValue || emp.CurrentDepartment == searchCriteria.Department.Value) &&
-                        (!searchCriteria.Position.HasValue || emp.CurrentPosition == searchCriteria.Position.Value)
+                        (!searchCriteria.Position.HasValue || emp.CurrentPosition == searchCriteria.Position.Value) &&
+                        (searchCriteria.IncludeRetired || !emp.IsRetired)
                     ).OrderBy(emp => emp.EmployeeNumber);
                 }
                 else
@@ -376,5 +383,6 @@
         public string Name { get; set; } = string.Empty;
         public Department? Department { get; set; } = null;
         public Domain.Enums.Position? Position { get; set; } = null;
+        public bool IncludeRetired { get; set; } = false;
     }
 }

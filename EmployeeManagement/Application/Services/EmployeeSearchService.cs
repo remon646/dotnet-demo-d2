@@ -116,7 +116,8 @@ public class EmployeeSearchService : IEmployeeSearchService
     /// </summary>
     public async Task<IEnumerable<Employee>> SearchForAutocompleteAsync(
         string keyword, 
-        int maxResults = DepartmentEditConstants.MAX_SEARCH_RESULTS, 
+        int maxResults = DepartmentEditConstants.MAX_SEARCH_RESULTS,
+        bool includeRetired = false,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -143,10 +144,18 @@ public class EmployeeSearchService : IEmployeeSearchService
             var allEmployees = await GetCachedAllEmployeesAsync(cancellationToken);
             
             // キーワードでフィルタリング（大文字小文字を区別しない）
-            var results = allEmployees
+            var query = allEmployees
                 .Where(emp => 
                     emp.EmployeeNumber.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-                    emp.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    emp.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+
+            // 退職者フィルタリング
+            if (!includeRetired)
+            {
+                query = query.Where(emp => !emp.IsRetired);
+            }
+
+            var results = query
                 .OrderBy(emp => emp.EmployeeNumber)
                 .Take(maxResults)
                 .ToList();
@@ -244,6 +253,12 @@ public class EmployeeSearchService : IEmployeeSearchService
             {
                 // 将来的に Employee に IsActive プロパティが追加される場合の実装
                 // query = query.Where(emp => emp.IsActive);
+            }
+
+            // 退職者フィルタ
+            if (!criteria.IncludeRetired)
+            {
+                query = query.Where(emp => !emp.IsRetired);
             }
             
             var results = query.OrderBy(emp => emp.EmployeeNumber).ToList();
