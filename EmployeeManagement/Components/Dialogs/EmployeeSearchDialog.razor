@@ -107,6 +107,7 @@
                                        RowClick="@RowClickEvent"
                                        SelectedItem="@selectedEmployee"
                                        SelectedItemChanged="@((Employee item) => selectedEmployee = item)"
+                                       RowClassFunc="@GetRowClass"
                                        Height="400px"
                                        FixedHeader="true">
                                 <Columns>
@@ -286,6 +287,21 @@
     {
         selectedEmployee = args.Item;
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// 選択された行にCSSクラスを適用するためのメソッド
+    /// 選択中の社員行に視覚的ハイライトを提供
+    /// </summary>
+    /// <param name="employee">対象の社員オブジェクト</param>
+    /// <param name="rowIndex">行のインデックス</param>
+    /// <returns>適用するCSSクラス名</returns>
+    private string GetRowClass(Employee employee, int rowIndex)
+    {
+        // 選択中の社員と一致する場合はハイライトクラスを適用
+        return selectedEmployee != null && selectedEmployee.EmployeeNumber == employee.EmployeeNumber
+            ? "employee-search-selected-row"
+            : string.Empty;
     }
 
     /// <summary>

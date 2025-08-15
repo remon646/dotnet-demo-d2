@@ -345,6 +345,23 @@ h1:focus {
     }
 }
 
+/* Employee Search Dialog - Selected Row Highlighting */
+.employee-search-selected-row {
+    background: linear-gradient(90deg, 
+        rgba(25, 118, 210, 0.12) 0%, 
+        rgba(25, 118, 210, 0.08) 100%) !important;
+    border-left: 4px solid #1976d2 !important;
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15) !important;
+    transition: all 0.3s ease !important;
+}
+
+.employee-search-selected-row:hover {
+    background: linear-gradient(90deg, 
+        rgba(25, 118, 210, 0.18) 0%, 
+        rgba(25, 118, 210, 0.12) 100%) !important;
+    transform: translateX(2px) !important;
+}
+
 /* Material Icons Fix */
 .mud-icon-root {
     font-family: 'Material Icons' !important;
