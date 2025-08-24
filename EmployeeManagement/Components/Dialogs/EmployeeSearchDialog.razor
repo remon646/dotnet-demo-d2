@@ -171,9 +171,10 @@
 @code {
     /// <summary>
     /// MudBlazorダイアログのインスタンス参照（Cascading Parameter）
+    /// MudBlazor 8.x では IMudDialogInstance を使用
     /// </summary>
     [CascadingParameter] 
-    public MudBlazor.IDialogReference? MudDialog { get; set; }
+    public MudBlazor.IMudDialogInstance? MudDialog { get; set; }
     [Parameter] public string Title { get; set; } = "社員選択";
     [Parameter] public bool AllowClear { get; set; } = true;
     [Parameter] public Employee? SelectedEmployee { get; set; }
@@ -338,7 +339,7 @@
             }
 
             // ダイアログを正常終了として閉じる
-            MudDialog.Close(DialogResult.Ok(selectedEmployee));
+            MudDialog.Close(selectedEmployee);
         }
         catch (Exception ex)
         {
@@ -367,7 +368,7 @@
             }
 
             // ダイアログをキャンセル状態で閉じる
-            MudDialog.Close(DialogResult.Cancel());
+            MudDialog.Cancel();
         }
         catch (Exception ex)
         {
