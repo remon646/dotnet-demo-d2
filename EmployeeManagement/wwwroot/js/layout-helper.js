@@ -246,6 +246,36 @@ window.layoutHelper = {
     }
 };
 
+/**
+ * ファイルダウンロード機能
+ * @param {string} fileName - ダウンロードするファイル名
+ * @param {string} mimeType - MIMEタイプ
+ * @param {string} content - ファイルの内容
+ */
+window.downloadFile = function(fileName, mimeType, content) {
+    try {
+        const blob = new Blob([content], { type: mimeType });
+        const url = window.URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        
+        // リンクを一時的にDOMに追加してクリック
+        document.body.appendChild(link);
+        link.click();
+        
+        // クリーンアップ
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        console.log(`File downloaded: ${fileName}`);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        throw error;
+    }
+};
+
 // ページロード完了時の初期化ログ
 document.addEventListener('DOMContentLoaded', function () {
     console.log('Layout helper script loaded. Initial breakpoint:', getCurrentBreakpoint());

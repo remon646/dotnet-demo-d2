@@ -1,0 +1,372 @@
+@using EmployeeManagement.Domain.Models
+@using System.Text.Json
+@using MudBlazor
+@inject IJSRuntime JsRuntime
+@inject ISnackbar Snackbar
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+            @if (AuditLog != null)
+            {
+                <!-- 基本情報 -->
+                <MudCard Elevation="1" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">基本情報</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Label="日時" 
+                                             Value="@AuditLog.Timestamp.ToString("yyyy/MM/dd HH:mm:ss")" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="AuditLogLevel" 
+                                          Label="ログレベル" 
+                                          Value="@AuditLog.Level" 
+                                          Variant="Variant.Outlined" 
+                                          ReadOnly="true">
+                                    <MudSelectItem Value="@AuditLogLevel.Info">Info</MudSelectItem>
+                                    <MudSelectItem Value="@AuditLogLevel.Warning">Warning</MudSelectItem>
+                                    <MudSelectItem Value="@AuditLogLevel.Error">Error</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Label="ユーザーID" 
+                                             Value="@AuditLog.UserId" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Label="ユーザー名" 
+                                             Value="@AuditLog.UserName" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField Label="操作" 
+                                             Value="@AuditLog.Action" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField Label="対象エンティティ" 
+                                             Value="@AuditLog.EntityType" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField Label="対象ID" 
+                                             Value="@AuditLog.EntityId" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Label="IPアドレス" 
+                                             Value="@(string.IsNullOrEmpty(AuditLog.IpAddress) ? "不明" : AuditLog.IpAddress)" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Label="詳細情報" 
+                                             Value="@AuditLog.Details" 
+                                             Variant="Variant.Outlined" 
+                                             ReadOnly="true" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- 変更前データ -->
+                @if (!string.IsNullOrEmpty(AuditLog.OldValues))
+                {
+                    <MudCard Elevation="1" Class="mb-4">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">変更前データ</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" 
+                                              Color="Color.Default" 
+                                              OnClick="@(() => CopyToClipboardAsync(AuditLog.OldValues))"
+                                              Title="クリップボードにコピー" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudPaper Class="pa-3" Elevation="0" Style="background-color: var(--mud-palette-background-grey); max-height: 300px; overflow-y: auto;">
+                                <pre style="margin: 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.875rem; line-height: 1.4; white-space: pre-wrap;">@FormatJson(AuditLog.OldValues)</pre>
+                            </MudPaper>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                <!-- 変更後データ -->
+                @if (!string.IsNullOrEmpty(AuditLog.NewValues))
+                {
+                    <MudCard Elevation="1" Class="mb-4">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">変更後データ</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" 
+                                              Color="Color.Default" 
+                                              OnClick="@(() => CopyToClipboardAsync(AuditLog.NewValues))"
+                                              Title="クリップボードにコピー" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudPaper Class="pa-3" Elevation="0" Style="background-color: var(--mud-palette-background-grey); max-height: 300px; overflow-y: auto;">
+                                <pre style="margin: 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.875rem; line-height: 1.4; white-space: pre-wrap;">@FormatJson(AuditLog.NewValues)</pre>
+                            </MudPaper>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                <!-- データ変更差分 -->
+                @if (!string.IsNullOrEmpty(AuditLog.OldValues) && !string.IsNullOrEmpty(AuditLog.NewValues))
+                {
+                    <MudCard Elevation="1" Class="mb-4">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">変更差分</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudPaper Class="pa-3" Elevation="0" Style="background-color: var(--mud-palette-background-grey); max-height: 400px; overflow-y: auto;">
+                                @{
+                                    var diff = CalculateDifference(AuditLog.OldValues, AuditLog.NewValues);
+                                }
+                                @if (diff.Any())
+                                {
+                                    <MudList T="PropertyChange" Dense="true">
+                                        @foreach (var change in diff)
+                                        {
+                                            <MudListItem T="PropertyChange">
+                                                <div class="d-flex flex-column">
+                                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">@change.PropertyName</MudText>
+                                                    <div class="d-flex">
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Label="true" Class="me-2">
+                                                            変更前: @change.OldValue
+                                                        </MudChip>
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Label="true">
+                                                            変更後: @change.NewValue
+                                                        </MudChip>
+                                                    </div>
+                                                </div>
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="text-center pa-4">
+                                        変更差分の計算ができませんでした。
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </MudCardContent>
+                    </MudCard>
+                }
+            }
+</MudContainer>
+
+@code {
+    [Parameter] public AuditLog? AuditLog { get; set; }
+
+    /// <summary>
+    /// JSONを整形表示用にフォーマットします
+    /// </summary>
+    private string FormatJson(string json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return "";
+
+        try
+        {
+            var jsonElement = JsonSerializer.Deserialize<JsonElement>(json);
+            return JsonSerializer.Serialize(jsonElement, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+        }
+        catch
+        {
+            // JSONでない場合はそのまま返す
+            return json;
+        }
+    }
+
+    /// <summary>
+    /// クリップボードにテキストをコピーします
+    /// </summary>
+    private async Task CopyToClipboardAsync(string text)
+    {
+        try
+        {
+            await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("クリップボードにコピーしました", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("クリップボードへのコピーに失敗しました", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 監査ログの詳細をエクスポートします
+    /// </summary>
+    private async Task ExportDetailAsync()
+    {
+        if (AuditLog == null) return;
+
+        try
+        {
+            var detail = GenerateDetailText(AuditLog);
+            var fileName = $"audit_log_detail_{AuditLog.Id}_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+            
+            await JsRuntime.InvokeVoidAsync("downloadFile", fileName, "text/plain", detail);
+            Snackbar.Add("詳細ファイルをダウンロードしました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"詳細出力でエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 監査ログの詳細テキストを生成します
+    /// </summary>
+    private string GenerateDetailText(AuditLog auditLog)
+    {
+        var detail = new System.Text.StringBuilder();
+        
+        detail.AppendLine("=== 監査ログ詳細 ===");
+        detail.AppendLine($"ID: {auditLog.Id}");
+        detail.AppendLine($"日時: {auditLog.Timestamp:yyyy/MM/dd HH:mm:ss}");
+        detail.AppendLine($"レベル: {auditLog.Level}");
+        detail.AppendLine($"ユーザーID: {auditLog.UserId}");
+        detail.AppendLine($"ユーザー名: {auditLog.UserName}");
+        detail.AppendLine($"操作: {auditLog.Action}");
+        detail.AppendLine($"対象エンティティ: {auditLog.EntityType}");
+        detail.AppendLine($"対象ID: {auditLog.EntityId}");
+        detail.AppendLine($"IPアドレス: {auditLog.IpAddress}");
+        detail.AppendLine($"詳細情報: {auditLog.Details}");
+        detail.AppendLine();
+        
+        if (!string.IsNullOrEmpty(auditLog.OldValues))
+        {
+            detail.AppendLine("=== 変更前データ ===");
+            detail.AppendLine(FormatJson(auditLog.OldValues));
+            detail.AppendLine();
+        }
+        
+        if (!string.IsNullOrEmpty(auditLog.NewValues))
+        {
+            detail.AppendLine("=== 変更後データ ===");
+            detail.AppendLine(FormatJson(auditLog.NewValues));
+            detail.AppendLine();
+        }
+        
+        return detail.ToString();
+    }
+
+    /// <summary>
+    /// 2つのJSONの差分を計算します
+    /// </summary>
+    private List<PropertyChange> CalculateDifference(string oldJson, string newJson)
+    {
+        var changes = new List<PropertyChange>();
+        
+        try
+        {
+            var oldElement = JsonSerializer.Deserialize<JsonElement>(oldJson);
+            var newElement = JsonSerializer.Deserialize<JsonElement>(newJson);
+            
+            CompareJsonElements(oldElement, newElement, "", changes);
+        }
+        catch
+        {
+            // JSON解析エラーの場合は空のリストを返す
+        }
+        
+        return changes;
+    }
+
+    /// <summary>
+    /// JSON要素を比較して変更点を抽出します
+    /// </summary>
+    private void CompareJsonElements(JsonElement oldElement, JsonElement newElement, string path, List<PropertyChange> changes)
+    {
+        if (oldElement.ValueKind != newElement.ValueKind)
+        {
+            changes.Add(new PropertyChange
+            {
+                PropertyName = path,
+                OldValue = oldElement.ToString(),
+                NewValue = newElement.ToString()
+            });
+            return;
+        }
+
+        switch (oldElement.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var oldProps = oldElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+                var newProps = newElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+                
+                foreach (var prop in oldProps.Keys.Union(newProps.Keys))
+                {
+                    var propPath = string.IsNullOrEmpty(path) ? prop : $"{path}.{prop}";
+                    
+                    if (!newProps.ContainsKey(prop))
+                    {
+                        changes.Add(new PropertyChange
+                        {
+                            PropertyName = propPath,
+                            OldValue = oldProps[prop].ToString(),
+                            NewValue = "(削除)"
+                        });
+                    }
+                    else if (!oldProps.ContainsKey(prop))
+                    {
+                        changes.Add(new PropertyChange
+                        {
+                            PropertyName = propPath,
+                            OldValue = "(新規)",
+                            NewValue = newProps[prop].ToString()
+                        });
+                    }
+                    else
+                    {
+                        CompareJsonElements(oldProps[prop], newProps[prop], propPath, changes);
+                    }
+                }
+                break;
+                
+            default:
+                if (!oldElement.ToString().Equals(newElement.ToString()))
+                {
+                    changes.Add(new PropertyChange
+                    {
+                        PropertyName = path,
+                        OldValue = oldElement.ToString(),
+                        NewValue = newElement.ToString()
+                    });
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// プロパティ変更情報を表すクラス
+    /// </summary>
+    private class PropertyChange
+    {
+        public string PropertyName { get; set; } = "";
+        public string OldValue { get; set; } = "";
+        public string NewValue { get; set; } = "";
+    }
+}

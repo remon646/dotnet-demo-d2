@@ -41,6 +41,23 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IEmployeeNumberRepository, EmployeeNumberRepository>();
 builder.Services.AddScoped<IDepartmentHistoryRepository, DepartmentHistoryRepository>();
 
+// Register role and permission repositories
+builder.Services.AddScoped<IRoleRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryRoleRepository>();
+builder.Services.AddScoped<IPermissionRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryPermissionRepository>();
+
+// Register audit log repository and service
+builder.Services.AddScoped<IAuditLogRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryAuditLogRepository>();
+builder.Services.AddScoped<IAuditLogService, EmployeeManagement.Application.Services.AuditLogService>();
+
+// Register notification repositories
+builder.Services.AddScoped<INotificationRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryNotificationRepository>();
+builder.Services.AddScoped<INotificationTemplateRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryNotificationTemplateRepository>();
+builder.Services.AddScoped<INotificationSettingsRepository, EmployeeManagement.Infrastructure.Repositories.InMemoryNotificationSettingsRepository>();
+
+// Register notification services
+builder.Services.AddScoped<INotificationService, EmployeeManagement.Application.Services.NotificationService>();
+builder.Services.AddScoped<INotificationDeliveryService, EmployeeManagement.Application.Services.NotificationDeliveryService>();
+
 // Register application services - 既存サービス
 builder.Services.AddScoped<EmployeeManagement.Application.Interfaces.IAuthenticationService, EmployeeManagement.Application.Services.AuthenticationService>();
 builder.Services.AddScoped<EmployeeNumberService>();
@@ -65,10 +82,25 @@ builder.Services.AddScoped<IDepartmentUIService, DepartmentUIService>();
 // ViewModels（状態管理）
 builder.Services.AddScoped<EmployeeManagement.ViewModels.DepartmentEditViewModel>();
 
+// Authorization services
+builder.Services.AddScoped<IAuthorizationService, EmployeeManagement.Application.Services.AuthorizationService>();
+builder.Services.AddScoped<IRoleInitializationService, RoleInitializationService>();
+
 // メモリキャッシュサービス（社員検索用）
 builder.Services.AddMemoryCache();
 
 var app = builder.Build();
+
+// Initialize roles and permissions on startup
+using (var scope = app.Services.CreateScope())
+{
+    var roleInitService = scope.ServiceProvider.GetRequiredService<IRoleInitializationService>();
+    await roleInitService.InitializeSystemRolesAsync("system");
+    
+    // Assign admin role to existing admin user
+    await roleInitService.CreateAdminUserAsync("admin", "system");
+    await roleInitService.AssignDefaultUserRoleAsync("user", "system");
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -89,5 +121,8 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Map SignalR hub
+app.MapHub<EmployeeManagement.Infrastructure.Hubs.NotificationHub>("/notificationhub");
 
 app.Run();

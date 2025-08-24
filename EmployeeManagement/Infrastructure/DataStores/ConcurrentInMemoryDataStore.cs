@@ -12,6 +12,18 @@ public class ConcurrentInMemoryDataStore
     private readonly ConcurrentDictionary<string, object> _collections = new();
     private readonly object _lockObject = new();
 
+    // Role and Permission related collections
+    private readonly ConcurrentDictionary<int, Role> _roles = new();
+    private readonly ConcurrentDictionary<int, Permission> _permissions = new();
+    private readonly ConcurrentDictionary<int, UserRole> _userRoles = new();
+    private readonly ConcurrentDictionary<int, RolePermission> _rolePermissions = new();
+
+    // ID generators for role/permission system
+    private int _nextRoleId = 1;
+    private int _nextPermissionId = 1;
+    private int _nextUserRoleId = 1;
+    private int _nextRolePermissionId = 1;
+
     /// <summary>
     /// 指定された型のコレクションを取得または作成
     /// </summary>
@@ -19,6 +31,48 @@ public class ConcurrentInMemoryDataStore
     {
         return (ConcurrentDictionary<string, T>)_collections.GetOrAdd(collectionName, 
             _ => new ConcurrentDictionary<string, T>());
+    }
+
+    /// <summary>
+    /// 指定されたコレクション名でタイプ別のコレクションを初期化します
+    /// </summary>
+    /// <typeparam name="T">コレクションに格納するオブジェクトの型</typeparam>
+    /// <param name="collectionName">コレクション名</param>
+    public void InitializeCollection<T>(string collectionName)
+    {
+        _collections.GetOrAdd(collectionName, _ => new ConcurrentBag<T>());
+    }
+
+    /// <summary>
+    /// 指定されたコレクション名のコレクションが存在するかを確認します
+    /// </summary>
+    /// <param name="collectionName">コレクション名</param>
+    /// <returns>コレクションが存在する場合はtrue</returns>
+    public bool HasCollection(string collectionName)
+    {
+        return _collections.ContainsKey(collectionName);
+    }
+
+    /// <summary>
+    /// 指定されたコレクション名のコレクションを取得します
+    /// </summary>
+    /// <typeparam name="T">コレクションに格納するオブジェクトの型</typeparam>
+    /// <param name="collectionName">コレクション名</param>
+    /// <returns>コレクション</returns>
+    public ConcurrentBag<T> GetCollection<T>(string collectionName)
+    {
+        return (ConcurrentBag<T>)_collections.GetOrAdd(collectionName, _ => new ConcurrentBag<T>());
+    }
+
+    /// <summary>
+    /// 指定されたコレクション名のコレクションを置き換えます
+    /// </summary>
+    /// <typeparam name="T">コレクションに格納するオブジェクトの型</typeparam>
+    /// <param name="collectionName">コレクション名</param>
+    /// <param name="newCollection">新しいコレクション</param>
+    public void ReplaceCollection<T>(string collectionName, ConcurrentBag<T> newCollection)
+    {
+        _collections.AddOrUpdate(collectionName, newCollection, (key, oldValue) => newCollection);
     }
 
     public ConcurrentInMemoryDataStore()
@@ -513,5 +567,109 @@ public class ConcurrentInMemoryDataStore
     public DateTime GetLastDepartmentUpdateDate()
     {
         return _departments.Values.DefaultIfEmpty().Max(d => d?.UpdatedAt ?? DateTime.MinValue);
+    }
+
+    // Role and Permission operations
+    
+    /// <summary>
+    /// ロールコレクションを取得
+    /// </summary>
+    public ConcurrentDictionary<int, Role> Roles => _roles;
+
+    /// <summary>
+    /// 権限コレクションを取得
+    /// </summary>
+    public ConcurrentDictionary<int, Permission> Permissions => _permissions;
+
+    /// <summary>
+    /// ユーザーロールコレクションを取得
+    /// </summary>
+    public ConcurrentDictionary<int, UserRole> UserRoles => _userRoles;
+
+    /// <summary>
+    /// ロール権限コレクションを取得
+    /// </summary>
+    public ConcurrentDictionary<int, RolePermission> RolePermissions => _rolePermissions;
+
+    /// <summary>
+    /// 次のロールIDを取得
+    /// </summary>
+    public int GetNextRoleId()
+    {
+        return Interlocked.Increment(ref _nextRoleId);
+    }
+
+    /// <summary>
+    /// 次の権限IDを取得
+    /// </summary>
+    public int GetNextPermissionId()
+    {
+        return Interlocked.Increment(ref _nextPermissionId);
+    }
+
+    /// <summary>
+    /// 次のユーザーロールIDを取得
+    /// </summary>
+    public int GetNextUserRoleId()
+    {
+        return Interlocked.Increment(ref _nextUserRoleId);
+    }
+
+    /// <summary>
+    /// 次のロール権限IDを取得
+    /// </summary>
+    public int GetNextRolePermissionId()
+    {
+        return Interlocked.Increment(ref _nextRolePermissionId);
+    }
+
+    /// <summary>
+    /// ユーザーを追加
+    /// </summary>
+    public bool AddUser(User user)
+    {
+        user.CreatedAt = DateTime.Now;
+        user.UpdatedAt = DateTime.Now;
+        return _users.TryAdd(user.UserId, user);
+    }
+
+    /// <summary>
+    /// ユーザーを更新
+    /// </summary>
+    public bool UpdateUser(User user)
+    {
+        lock (_lockObject)
+        {
+            if (_users.ContainsKey(user.UserId))
+            {
+                user.UpdatedAt = DateTime.Now;
+                _users[user.UserId] = user;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 全ユーザーを取得
+    /// </summary>
+    public IEnumerable<User> GetAllUsers()
+    {
+        return _users.Values.ToList();
+    }
+
+    /// <summary>
+    /// ロール・権限システムの統計情報を取得
+    /// </summary>
+    public (int TotalRoles, int ActiveRoles, int TotalPermissions, int ActivePermissions, int TotalUserRoles, int ActiveUserRoles) GetAuthorizationStatistics()
+    {
+        var totalRoles = _roles.Count;
+        var activeRoles = _roles.Values.Count(r => r.IsActive);
+        var totalPermissions = _permissions.Count;
+        var activePermissions = _permissions.Values.Count(p => p.IsActive);
+        var totalUserRoles = _userRoles.Count;
+        var activeUserRoles = _userRoles.Values.Count(ur => ur.IsCurrentlyValid());
+
+        return (totalRoles, activeRoles, totalPermissions, activePermissions, totalUserRoles, activeUserRoles);
     }
 }

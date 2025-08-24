@@ -1,0 +1,451 @@
+@page "/audit-logs"
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Application.Interfaces
+@using System.Text.Json
+@using MudBlazor
+@inject IAuditLogService AuditLogService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JsRuntime
+@inherits EmployeeManagement.Components.AuthRequiredComponentBase
+
+<PageTitle>監査ログ | Employee Management</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
+    <!-- ヘッダー -->
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="Center.Center" Class="mb-4">
+        <MudText Typo="Typo.h4" GutterBottom="false">
+            <MudIcon Icon="@Icons.Material.Filled.Security" Class="me-2" />
+            監査ログ
+        </MudText>
+        <MudStack Row>
+            <MudButton Variant="Variant.Outlined" 
+                      StartIcon="@Icons.Material.Filled.Refresh"
+                      OnClick="RefreshAsync"
+                      Color="Color.Primary">
+                更新
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" 
+                      StartIcon="@Icons.Material.Filled.GetApp"
+                      OnClick="ExportToCsvAsync"
+                      Color="Color.Secondary">
+                CSV出力
+            </MudButton>
+        </MudStack>
+    </MudStack>
+
+    <!-- 検索フィルター -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">検索フィルター</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudIconButton Icon="@(_filterExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                              Color="Color.Default"
+                              OnClick="() => _filterExpanded = !_filterExpanded" />
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCollapse Expanded="@_filterExpanded">
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_filterUserId" 
+                                     Label="ユーザーID" 
+                                     Variant="Variant.Outlined" 
+                                     Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect @bind-Value="_filterAction" 
+                                  Label="操作種別" 
+                                  Variant="Variant.Outlined" 
+                                  Clearable="true">
+                            <MudSelectItem Value="@("")">すべて</MudSelectItem>
+                            <MudSelectItem Value="Login">ログイン</MudSelectItem>
+                            <MudSelectItem Value="Logout">ログアウト</MudSelectItem>
+                            <MudSelectItem Value="Create">作成</MudSelectItem>
+                            <MudSelectItem Value="Update">更新</MudSelectItem>
+                            <MudSelectItem Value="Delete">削除</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect @bind-Value="_filterEntityType" 
+                                  Label="対象エンティティ" 
+                                  Variant="Variant.Outlined" 
+                                  Clearable="true">
+                            <MudSelectItem Value="@("")">すべて</MudSelectItem>
+                            <MudSelectItem Value="User">ユーザー</MudSelectItem>
+                            <MudSelectItem Value="Employee">社員</MudSelectItem>
+                            <MudSelectItem Value="DepartmentMaster">部署</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect @bind-Value="_filterLevel" 
+                                  Label="ログレベル" 
+                                  Variant="Variant.Outlined" 
+                                  Clearable="true">
+                            <MudSelectItem T="AuditLogLevel?" Value="@(null)">すべて</MudSelectItem>
+                            <MudSelectItem T="AuditLogLevel?" Value="@AuditLogLevel.Info">Info</MudSelectItem>
+                            <MudSelectItem T="AuditLogLevel?" Value="@AuditLogLevel.Warning">Warning</MudSelectItem>
+                            <MudSelectItem T="AuditLogLevel?" Value="@AuditLogLevel.Error">Error</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+                <MudGrid Class="mt-3">
+                    <MudItem xs="12" md="4">
+                        <MudDatePicker @bind-Date="_filterFromDate" 
+                                      Label="開始日" 
+                                      Variant="Variant.Outlined" 
+                                      Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudDatePicker @bind-Date="_filterToDate" 
+                                      Label="終了日" 
+                                      Variant="Variant.Outlined" 
+                                      Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="4" Class="d-flex align-end">
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Search"
+                                  OnClick="SearchAsync"
+                                  Class="me-2">
+                            検索
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" 
+                                  OnClick="ClearFiltersAsync">
+                            クリア
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCollapse>
+    </MudCard>
+
+    <!-- データグリッド -->
+    <MudCard>
+        <MudCardContent Class="pa-0">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            <MudDataGrid Items="@_filteredAuditLogs" 
+                         Sortable="true" 
+                         Filterable="false"
+                         Pageable="true"
+                         PageSize="20"
+                         Height="600px"
+                         Dense="true"
+                         Hover="true"
+                         RowClick="@OnRowClick">
+                <Columns>
+                    <PropertyColumn Property="x => x.Timestamp" Title="日時" Format="yyyy/MM/dd HH:mm:ss">
+                        <CellTemplate>
+                            <MudText Typo="Typo.body2">@context.Item.Timestamp.ToString("yyyy/MM/dd HH:mm:ss")</MudText>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.Level" Title="レベル">
+                        <CellTemplate>
+                            @{
+                                var color = context.Item.Level switch
+                                {
+                                    AuditLogLevel.Info => Color.Success,
+                                    AuditLogLevel.Warning => Color.Warning,
+                                    AuditLogLevel.Error => Color.Error,
+                                    _ => Color.Default
+                                };
+                            }
+                            <MudChip Size="Size.Small" Color="@color">
+                                @context.Item.Level.ToString()
+                            </MudChip>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.UserName" Title="ユーザー" />
+                    <PropertyColumn Property="x => x.Action" Title="操作">
+                        <CellTemplate>
+                            @{
+                                var actionColor = context.Item.Action switch
+                                {
+                                    "Login" => Color.Primary,
+                                    "Logout" => Color.Secondary,
+                                    "Create" => Color.Success,
+                                    "Update" => Color.Warning,
+                                    "Delete" => Color.Error,
+                                    _ => Color.Default
+                                };
+                            }
+                            <MudChip Size="Size.Small" Color="@actionColor" Variant="Variant.Outlined">
+                                @context.Item.Action
+                            </MudChip>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.EntityType" Title="対象" />
+                    <PropertyColumn Property="x => x.EntityId" Title="対象ID">
+                        <CellTemplate>
+                            <MudText Typo="Typo.body2" Class="mud-text-truncate" Style="max-width: 150px;">
+                                @context.Item.EntityId
+                            </MudText>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.IpAddress" Title="IPアドレス">
+                        <CellTemplate>
+                            <MudText Typo="Typo.body2">
+                                @(string.IsNullOrEmpty(context.Item.IpAddress) ? "-" : context.Item.IpAddress)
+                            </MudText>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <TemplateColumn Title="詳細" Sortable="false">
+                        <CellTemplate>
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                          Size="Size.Small" 
+                                          Color="Color.Primary"
+                                          OnClick="@(() => ShowDetailAsync(context.Item))" />
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body1" Class="text-center pa-4">
+                        監査ログが見つかりませんでした。
+                    </MudText>
+                </NoRecordsContent>
+            </MudDataGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 統計情報 -->
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">統計情報</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudText Typo="Typo.h6" Color="Color.Primary">@_totalCount</MudText>
+                        <MudText Typo="Typo.body2">総ログ数</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudText Typo="Typo.h6" Color="Color.Success">@_infoCount</MudText>
+                        <MudText Typo="Typo.body2">Info</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudText Typo="Typo.h6" Color="Color.Warning">@_warningCount</MudText>
+                        <MudText Typo="Typo.body2">Warning</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudText Typo="Typo.h6" Color="Color.Error">@_errorCount</MudText>
+                        <MudText Typo="Typo.body2">Error</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    // データ管理
+    private List<AuditLog> _auditLogs = new();
+    private IEnumerable<AuditLog> _filteredAuditLogs = Enumerable.Empty<AuditLog>();
+    private bool _loading = false;
+
+    // フィルター状態
+    private bool _filterExpanded = false;
+    private string _filterUserId = "";
+    private string _filterAction = "";
+    private string _filterEntityType = "";
+    private AuditLogLevel? _filterLevel = null;
+    private DateTime? _filterFromDate = null;
+    private DateTime? _filterToDate = null;
+
+    // 統計情報
+    private int _totalCount = 0;
+    private int _infoCount = 0;
+    private int _warningCount = 0;
+    private int _errorCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await LoadAuditLogsAsync();
+    }
+
+    /// <summary>
+    /// 監査ログを読み込みます
+    /// </summary>
+    private async Task LoadAuditLogsAsync()
+    {
+        try
+        {
+            _loading = true;
+            StateHasChanged();
+
+            _auditLogs = (await AuditLogService.GetAllAuditLogsAsync()).ToList();
+            _filteredAuditLogs = _auditLogs;
+
+            UpdateStatistics();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"監査ログの読み込みでエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 統計情報を更新します
+    /// </summary>
+    private void UpdateStatistics()
+    {
+        _totalCount = _filteredAuditLogs.Count();
+        _infoCount = _filteredAuditLogs.Count(log => log.Level == AuditLogLevel.Info);
+        _warningCount = _filteredAuditLogs.Count(log => log.Level == AuditLogLevel.Warning);
+        _errorCount = _filteredAuditLogs.Count(log => log.Level == AuditLogLevel.Error);
+    }
+
+    /// <summary>
+    /// 検索を実行します
+    /// </summary>
+    private async Task SearchAsync()
+    {
+        try
+        {
+            _loading = true;
+            StateHasChanged();
+
+            // フィルター条件を適用
+            _filteredAuditLogs = await AuditLogService.SearchAuditLogsAsync(
+                _filterUserId,
+                _filterAction,
+                _filterEntityType,
+                _filterFromDate,
+                _filterToDate,
+                _filterLevel);
+
+            UpdateStatistics();
+            Snackbar.Add("検索が完了しました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"検索でエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// フィルターをクリアします
+    /// </summary>
+    private async Task ClearFiltersAsync()
+    {
+        _filterUserId = "";
+        _filterAction = "";
+        _filterEntityType = "";
+        _filterLevel = null;
+        _filterFromDate = null;
+        _filterToDate = null;
+
+        await LoadAuditLogsAsync();
+        Snackbar.Add("フィルターをクリアしました", Severity.Info);
+    }
+
+    /// <summary>
+    /// データを更新します
+    /// </summary>
+    private async Task RefreshAsync()
+    {
+        await LoadAuditLogsAsync();
+        Snackbar.Add("データを更新しました", Severity.Success);
+    }
+
+    /// <summary>
+    /// CSVファイルにエクスポートします
+    /// </summary>
+    private async Task ExportToCsvAsync()
+    {
+        try
+        {
+            var csv = GenerateCsv(_filteredAuditLogs);
+            var fileName = $"audit_logs_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            
+            await JsRuntime.InvokeVoidAsync("downloadFile", fileName, "text/csv", csv);
+            Snackbar.Add("CSVファイルをダウンロードしました", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"CSV出力でエラーが発生しました: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 監査ログの詳細を表示します
+    /// </summary>
+    private async Task ShowDetailAsync(AuditLog auditLog)
+    {
+        var parameters = new DialogParameters<AuditLogDetailDialog>
+        {
+            { x => x.AuditLog, auditLog }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<AuditLogDetailDialog>("監査ログ詳細", parameters, options);
+    }
+
+    /// <summary>
+    /// 行をクリックした時の処理
+    /// </summary>
+    private async Task OnRowClick(DataGridRowClickEventArgs<AuditLog> args)
+    {
+        if (args.Item != null)
+        {
+            await ShowDetailAsync(args.Item);
+        }
+    }
+
+    /// <summary>
+    /// CSV形式の文字列を生成します
+    /// </summary>
+    private string GenerateCsv(IEnumerable<AuditLog> logs)
+    {
+        var csv = new System.Text.StringBuilder();
+        
+        // ヘッダー
+        csv.AppendLine("日時,レベル,ユーザーID,ユーザー名,操作,対象エンティティ,対象ID,IPアドレス,詳細");
+        
+        // データ行
+        foreach (var log in logs)
+        {
+            csv.AppendLine($"\"{log.Timestamp:yyyy/MM/dd HH:mm:ss}\"," +
+                          $"\"{log.Level}\"," +
+                          $"\"{log.UserId}\"," +
+                          $"\"{log.UserName}\"," +
+                          $"\"{log.Action}\"," +
+                          $"\"{log.EntityType}\"," +
+                          $"\"{log.EntityId}\"," +
+                          $"\"{log.IpAddress}\"," +
+                          $"\"{log.Details}\"");
+        }
+        
+        return csv.ToString();
+    }
+}
