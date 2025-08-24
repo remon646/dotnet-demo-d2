@@ -57,6 +57,7 @@ builder.Services.AddScoped<IDepartmentValidationService, DepartmentValidationSer
 // データサービス
 builder.Services.AddScoped<IDepartmentDataService, DepartmentDataService>();
 builder.Services.AddScoped<IEmployeeSearchService, EmployeeSearchService>();
+builder.Services.AddScoped<IDepartmentSearchService, DepartmentSearchService>();
 
 // UIサービス
 builder.Services.AddScoped<IDepartmentUIService, DepartmentUIService>();

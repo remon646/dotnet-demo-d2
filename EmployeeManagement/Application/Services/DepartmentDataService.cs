@@ -3,6 +3,7 @@ using EmployeeManagement.Domain.Interfaces;
 using EmployeeManagement.Domain.Models;
 using EmployeeManagement.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace EmployeeManagement.Application.Services;
 
@@ -45,6 +46,17 @@ public class DepartmentDataService : IDepartmentDataService
     /// </summary>
     private readonly ILogger<DepartmentDataService> _logger;
     
+    /// <summary>
+    /// メモリキャッシュ
+    /// 部門データ更新時のキャッシュ無効化に使用
+    /// </summary>
+    private readonly IMemoryCache _memoryCache;
+    
+    /// <summary>
+    /// 部門データのキャッシュキー（DepartmentSearchServiceと同じキー）
+    /// </summary>
+    private const string ALL_DEPARTMENTS_CACHE_KEY = "DepartmentSearch_AllDepartments";
+    
     #endregion
     
     #region Constructor
@@ -56,18 +68,21 @@ public class DepartmentDataService : IDepartmentDataService
     /// <param name="employeeRepository">社員リポジトリ</param>
     /// <param name="validationService">部門バリデーションサービス</param>
     /// <param name="managerValidationService">責任者バリデーションサービス</param>
+    /// <param name="memoryCache">メモリキャッシュ</param>
     /// <param name="logger">ログ出力インスタンス</param>
     public DepartmentDataService(
         IDepartmentRepository departmentRepository,
         IEmployeeRepository employeeRepository,
         IDepartmentValidationService validationService,
         IManagerValidationService managerValidationService,
+        IMemoryCache memoryCache,
         ILogger<DepartmentDataService> logger)
     {
         _departmentRepository = departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
         _employeeRepository = employeeRepository ?? throw new ArgumentNullException(nameof(employeeRepository));
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _managerValidationService = managerValidationService ?? throw new ArgumentNullException(nameof(managerValidationService));
+        _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     
@@ -142,6 +157,10 @@ public class DepartmentDataService : IDepartmentDataService
             
             _logger.LogInformation("部門作成成功: {DepartmentCode} - {DepartmentName}", 
                 department.DepartmentCode, department.DepartmentName);
+            
+            // 6. 部門データのキャッシュを無効化（社員編集画面の部門検索を最新化）
+            _memoryCache.Remove(ALL_DEPARTMENTS_CACHE_KEY);
+            _logger.LogDebug("部門データキャッシュを無効化しました（作成後）");
             
             return ValidationResult.Success($"部門「{department.DepartmentName}」を作成しました。");
         }
@@ -224,6 +243,10 @@ public class DepartmentDataService : IDepartmentDataService
             _logger.LogInformation("部門更新成功: {DepartmentCode} - {DepartmentName}", 
                 department.DepartmentCode, department.DepartmentName);
             
+            // 6. 部門データのキャッシュを無効化（社員編集画面の部門検索を最新化）
+            _memoryCache.Remove(ALL_DEPARTMENTS_CACHE_KEY);
+            _logger.LogDebug("部門データキャッシュを無効化しました（作成後）");
+            
             return ValidationResult.Success($"部門「{department.DepartmentName}」の情報を更新しました。");
         }
         catch (Exception ex)
@@ -266,6 +289,11 @@ public class DepartmentDataService : IDepartmentDataService
             }
             
             _logger.LogInformation("部門削除成功: {DepartmentCode}", departmentCode);
+            
+            // 部門データのキャッシュを無効化（社員編集画面の部門検索を最新化）
+            _memoryCache.Remove(ALL_DEPARTMENTS_CACHE_KEY);
+            _logger.LogDebug("部門データキャッシュを無効化しました（削除後）");
+            
             return ValidationResult.Success($"部門「{departmentCode}」を削除しました。");
         }
         catch (Exception ex)

@@ -46,7 +46,8 @@
       "mcp__serena__search_for_pattern",
       "mcp__serena__find_file",
       "mcp__playwright__browser_install",
-      "mcp__serena__think_about_task_adherence"
+      "mcp__serena__think_about_task_adherence",
+      "Bash(grep:*)"
     ],
     "deny": []
   },

@@ -1,0 +1,292 @@
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using EmployeeManagement.Components.Dialogs
+@using MudBlazor
+@using Microsoft.Extensions.Logging
+@inject IDepartmentSearchService DepartmentSearchService
+@inject IDialogService DialogService
+@inject ILogger<DepartmentSelectorComponent> Logger
+@inject ISnackbar Snackbar
+
+<div class="department-selector-container">
+    <MudAutocomplete T="DepartmentMaster"
+                     Value="SelectedDepartment"
+                     SearchFunc="SearchDepartmentsAutocomplete"
+                     ToStringFunc="@(d => d != null ? $"{d.DepartmentName} ({d.DepartmentCode})" : string.Empty)"
+                     Label="@Label"
+                     Variant="@Variant"
+                     Required="@Required"
+                     Disabled="@Disabled"
+                     Class="@Class"
+                     HelperText="@HelperText"
+                     Adornment="Adornment.End"
+                     AdornmentIcon="@Icons.Material.Filled.Search"
+                     OnAdornmentClick="OpenSearchDialog"
+                     ValueChanged="OnDepartmentSelectionChanged"
+                     Clearable="@AllowClear">
+        <ItemTemplate Context="department">
+            <div class="d-flex align-center pa-2">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" 
+                               Size="Size.Small" 
+                               Class="mr-2" />
+                        <MudText Typo="Typo.body1">
+                            <strong>@department.DepartmentName</strong>
+                        </MudText>
+                        <MudChip T="string"
+                               Label="true" 
+                               Size="Size.Small"
+                               Color="Color.Info"
+                               Class="ml-2">
+                            @department.DepartmentCode
+                        </MudChip>
+                    </div>
+                    @if (!string.IsNullOrEmpty(department.ManagerName))
+                    {
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" 
+                                   Size="Size.Small" 
+                                   Class="mr-2" />
+                            <MudText Typo="Typo.caption">
+                                責任者: @department.ManagerName
+                            </MudText>
+                        </div>
+                    }
+                </div>
+                @if (!department.IsActive)
+                {
+                    <MudChip T="string"
+                           Label="true" 
+                           Size="Size.Small"
+                           Color="Color.Warning">
+                        無効
+                    </MudChip>
+                }
+            </div>
+        </ItemTemplate>
+    </MudAutocomplete>
+
+    @if (ShowSelectedDepartmentInfo && SelectedDepartment != null)
+    {
+        <MudCard Elevation="1" Class="mt-2">
+            <MudCardContent Class="pa-3">
+                <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2">
+                    選択された部門情報
+                </MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" 
+                                   Size="Size.Small" 
+                                   Class="mr-2" />
+                            <MudText Typo="Typo.body2">
+                                <strong>@SelectedDepartment.DepartmentName</strong> (@SelectedDepartment.DepartmentCode)
+                            </MudText>
+                        </div>
+                    </MudItem>
+                    @if (!string.IsNullOrEmpty(SelectedDepartment.ManagerName))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" 
+                                       Size="Size.Small" 
+                                       Class="mr-2" />
+                                <MudText Typo="Typo.body2">
+                                    責任者: @SelectedDepartment.ManagerName
+                                </MudText>
+                            </div>
+                        </MudItem>
+                    }
+                    @if (!string.IsNullOrEmpty(SelectedDepartment.Extension))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Phone" 
+                                       Size="Size.Small" 
+                                       Class="mr-2" />
+                                <MudText Typo="Typo.body2">
+                                    内線: @SelectedDepartment.Extension
+                                </MudText>
+                            </div>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" sm="6">
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Category" 
+                                   Size="Size.Small" 
+                                   Class="mr-2" />
+                            <MudText Typo="Typo.body2">
+                                種別: @SelectedDepartment.DepartmentType.ToDisplayName()
+                            </MudText>
+                        </div>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    }
+</div>
+
+<style>
+    .department-selector-container .mud-input-adornment-end {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// 選択された部門
+    /// </summary>
+    [Parameter] public DepartmentMaster? SelectedDepartment { get; set; }
+
+    /// <summary>
+    /// 選択された部門の変更通知
+    /// </summary>
+    [Parameter] public EventCallback<DepartmentMaster?> SelectedDepartmentChanged { get; set; }
+
+    /// <summary>
+    /// ラベル
+    /// </summary>
+    [Parameter] public string Label { get; set; } = "部門選択";
+
+    /// <summary>
+    /// バリアント
+    /// </summary>
+    [Parameter] public Variant Variant { get; set; } = Variant.Text;
+
+    /// <summary>
+    /// 必須フィールドかどうか
+    /// </summary>
+    [Parameter] public bool Required { get; set; } = false;
+
+    /// <summary>
+    /// 無効化されているかどうか
+    /// </summary>
+    [Parameter] public bool Disabled { get; set; } = false;
+
+    /// <summary>
+    /// CSSクラス
+    /// </summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// ヘルパーテキスト
+    /// </summary>
+    [Parameter] public string? HelperText { get; set; }
+
+    /// <summary>
+    /// 選択された部門の詳細情報を表示するかどうか
+    /// </summary>
+    [Parameter] public bool ShowSelectedDepartmentInfo { get; set; } = true;
+
+    /// <summary>
+    /// クリア可能かどうか
+    /// </summary>
+    [Parameter] public bool AllowClear { get; set; } = true;
+
+    /// <summary>
+    /// ダイアログタイトル
+    /// </summary>
+    [Parameter] public string DialogTitle { get; set; } = "部門選択";
+
+    /// <summary>
+    /// オートコンプリート検索（最大10件）
+    /// </summary>
+    /// <param name="searchTerm">検索語句</param>
+    /// <param name="cancellationToken">キャンセレーショントークン</param>
+    /// <returns>部門リスト</returns>
+    private async Task<IEnumerable<DepartmentMaster>> SearchDepartmentsAutocomplete(string searchTerm, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Logger.LogDebug("部門オートコンプリート検索: {SearchTerm}", searchTerm);
+
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                // 検索語句が空の場合は有効な部門を最大10件返す
+                var activeDepartments = await DepartmentSearchService.GetActiveDepartmentsAsync();
+                return activeDepartments.Take(10);
+            }
+
+            var results = await DepartmentSearchService.SearchDepartmentsAutocompleteAsync(searchTerm, 10);
+            
+            Logger.LogDebug("部門オートコンプリート結果: {Count}件", results.Count());
+            
+            return results;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "部門オートコンプリート検索中にエラーが発生しました: {SearchTerm}", searchTerm);
+            Snackbar.Add("検索中にエラーが発生しました。", Severity.Error);
+            return Enumerable.Empty<DepartmentMaster>();
+        }
+    }
+
+    /// <summary>
+    /// 部門選択変更時の処理
+    /// </summary>
+    /// <param name="department">選択された部門</param>
+    private async Task OnDepartmentSelectionChanged(DepartmentMaster? department)
+    {
+        try
+        {
+            Logger.LogDebug("部門選択変更: {DepartmentCode} - {DepartmentName}", 
+                department?.DepartmentCode, department?.DepartmentName);
+
+            SelectedDepartment = department;
+            await SelectedDepartmentChanged.InvokeAsync(department);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "部門選択変更処理中にエラーが発生しました");
+            Snackbar.Add("選択処理中にエラーが発生しました。", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 検索ダイアログを開く
+    /// </summary>
+    private async Task OpenSearchDialog()
+    {
+        try
+        {
+            if (Disabled)
+            {
+                return;
+            }
+
+            Logger.LogDebug("部門検索ダイアログを開きます");
+
+            var parameters = new DialogParameters();
+            var options = new DialogOptions 
+            { 
+                MaxWidth = MaxWidth.Large, 
+                FullWidth = true,
+                CloseOnEscapeKey = true
+            };
+
+            var dialog = await DialogService.ShowAsync<DepartmentSearchDialog>(DialogTitle, parameters, options);
+            var result = await dialog.Result;
+
+            if (!result.Canceled && result.Data is DepartmentMaster selectedDepartment)
+            {
+                Logger.LogInformation("部門検索ダイアログで選択: {DepartmentCode} - {DepartmentName}", 
+                    selectedDepartment.DepartmentCode, selectedDepartment.DepartmentName);
+
+                await OnDepartmentSelectionChanged(selectedDepartment);
+                
+                Snackbar.Add($"部門「{selectedDepartment.DepartmentName}」を選択しました。", Severity.Success);
+            }
+            else
+            {
+                Logger.LogDebug("部門検索ダイアログがキャンセルされました");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "部門検索ダイアログの表示中にエラーが発生しました");
+            Snackbar.Add("検索ダイアログの表示中にエラーが発生しました。", Severity.Error);
+        }
+    }
+}

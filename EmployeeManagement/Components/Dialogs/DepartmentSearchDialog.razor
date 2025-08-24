@@ -1,0 +1,390 @@
+@using EmployeeManagement.Domain.Models
+@using EmployeeManagement.Domain.Enums
+@using EmployeeManagement.Application.Interfaces
+@using MudBlazor
+@using Microsoft.Extensions.Logging
+@inject IDepartmentSearchService DepartmentSearchService
+@inject ILogger<DepartmentSearchDialog> Logger
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 900px;">
+            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">
+                🏢 部門検索
+            </MudText>
+
+            <!-- 検索条件 -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-3">検索条件</MudText>
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="searchCriteria.DepartmentCode"
+                                        Label="部門コード"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Tag"
+                                        Class="mb-2" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="searchCriteria.DepartmentName"
+                                        Label="部門名"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Business"
+                                        Class="mb-2" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="searchCriteria.ManagerName"
+                                        Label="責任者名"
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Person"
+                                        Class="mb-2" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="searchCriteria.DepartmentType"
+                                     Label="部門種別"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomCenter"
+                                     Class="mb-2">
+                                <MudSelectItem Value="@((Department?)null)">（すべて）</MudSelectItem>
+                                @foreach (Department dept in Enum.GetValues<Department>())
+                                {
+                                    <MudSelectItem Value="@((Department?)dept)">@dept.ToDisplayName()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect @bind-Value="searchCriteria.IsActive"
+                                     Label="有効状態"
+                                     Variant="Variant.Outlined"
+                                     AnchorOrigin="Origin.BottomCenter"
+                                     Class="mb-2">
+                                <MudSelectItem Value="@((bool?)null)">（すべて）</MudSelectItem>
+                                <MudSelectItem Value="@((bool?)true)">有効</MudSelectItem>
+                                <MudSelectItem Value="@((bool?)false)">無効</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudButton Variant="Variant.Filled"
+                                     Color="Color.Primary"
+                                     StartIcon="@Icons.Material.Filled.Search"
+                                     OnClick="HandleSearch"
+                                     Disabled="isSearching"
+                                     FullWidth="true"
+                                     Class="mt-1">
+                                @if (isSearching)
+                                {
+                                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                    <MudText Class="ms-2">検索中...</MudText>
+                                }
+                                else
+                                {
+                                    <MudText>検索実行</MudText>
+                                }
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- 検索結果 -->
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="mb-3">
+                        検索結果 (@searchResults.Count() 件)
+                    </MudText>
+
+                    @if (isSearching)
+                    {
+                        <div class="d-flex justify-center pa-4">
+                            <MudProgressCircular Color="Color.Primary" Size="Size.Medium" Indeterminate="true" />
+                        </div>
+                    }
+                    else if (!searchResults.Any())
+                    {
+                        <MudAlert Severity="Severity.Info">
+                            該当する部門が見つかりませんでした。検索条件を変更してください。
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudTable Items="@searchResults" 
+                                  Hover="true" 
+                                  Striped="true" 
+                                  Dense="true"
+                                  RowClass="cursor-pointer"
+                                  OnRowClick="OnRowClick"
+                                  T="DepartmentMaster"
+                                  RowClassFunc="@GetRowClass">
+                            <HeaderContent>
+                                <MudTh>部門コード</MudTh>
+                                <MudTh>部門名</MudTh>
+                                <MudTh>責任者</MudTh>
+                                <MudTh>部門種別</MudTh>
+                                <MudTh>内線番号</MudTh>
+                                <MudTh>有効</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="部門コード">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Tag" 
+                                               Size="Size.Small" 
+                                               Class="mr-2" />
+                                        <strong>@context.DepartmentCode</strong>
+                                    </div>
+                                </MudTd>
+                                <MudTd DataLabel="部門名">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Business" 
+                                               Size="Size.Small" 
+                                               Class="mr-2" />
+                                        @context.DepartmentName
+                                    </div>
+                                </MudTd>
+                                <MudTd DataLabel="責任者">
+                                    @if (!string.IsNullOrEmpty(context.ManagerName))
+                                    {
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Person" 
+                                                   Size="Size.Small" 
+                                                   Class="mr-2" />
+                                            @context.ManagerName
+                                            @if (!string.IsNullOrEmpty(context.ManagerEmployeeNumber))
+                                            {
+                                                <MudText Typo="Typo.caption" Class="ml-1">
+                                                    (@context.ManagerEmployeeNumber)
+                                                </MudText>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Default">
+                                            未設定
+                                        </MudText>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="部門種別">
+                                    <MudChip T="string"
+                                           Label="true" 
+                                           Size="Size.Small"
+                                           Color="Color.Info">
+                                        @context.DepartmentType.ToDisplayName()
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="内線番号">
+                                    @if (!string.IsNullOrEmpty(context.Extension))
+                                    {
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Phone" 
+                                                   Size="Size.Small" 
+                                                   Class="mr-1" />
+                                            @context.Extension
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Default">
+                                            -
+                                        </MudText>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="有効">
+                                    <MudSwitch @bind-Value="context.IsActive" 
+                                             ReadOnly="true"
+                                             Color="@(context.IsActive ? Color.Success : Color.Default)" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" 
+                 Variant="Variant.Outlined" 
+                 Color="Color.Secondary">
+            キャンセル
+        </MudButton>
+        <MudButton OnClick="@(() => SelectDepartment(selectedDepartment))" 
+                 Variant="Variant.Filled" 
+                 Color="Color.Primary"
+                 Disabled="@(selectedDepartment == null)">
+            選択
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    .selected-row {
+        background-color: var(--mud-palette-action-selected) !important;
+    }
+</style>
+
+@code {
+    private DepartmentSearchCriteria searchCriteria = new();
+    private List<DepartmentMaster> searchResults = new();
+    private DepartmentMaster? selectedDepartment;
+    private bool isSearching = false;
+
+    [CascadingParameter] public MudBlazor.IMudDialogInstance? MudDialog { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("DepartmentSearchDialog initializing - MudDialog reference: {IsNull}", 
+            MudDialog == null ? "NULL" : "OK");
+            
+        try
+        {
+            // 初期表示では有効な部門のみを表示
+            searchCriteria.IsActive = true;
+            await HandleSearch();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "DepartmentSearchDialog初期化中にエラーが発生しました");
+            Snackbar.Add("初期化中にエラーが発生しました。", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 検索実行
+    /// </summary>
+    private async Task HandleSearch()
+    {
+        try
+        {
+            isSearching = true;
+            selectedDepartment = null;
+            StateHasChanged();
+
+            Logger.LogDebug("部門検索実行: {@SearchCriteria}", searchCriteria);
+
+            var results = await DepartmentSearchService.SearchDepartmentsAsync(searchCriteria);
+            searchResults = results.ToList();
+
+            Logger.LogDebug("部門検索完了: 結果件数={Count}", searchResults.Count);
+
+            if (searchResults.Count == 0)
+            {
+                Snackbar.Add("該当する部門が見つかりませんでした。", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add($"{searchResults.Count}件の部門が見つかりました。", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "部門検索中にエラーが発生しました");
+            Snackbar.Add("検索中にエラーが発生しました。", Severity.Error);
+            searchResults.Clear();
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 行クリック時の処理
+    /// </summary>
+    /// <param name="tableRowClickEventArgs">行クリックイベント引数</param>
+    private void OnRowClick(TableRowClickEventArgs<DepartmentMaster> tableRowClickEventArgs)
+    {
+        try
+        {
+            var clickedDepartment = tableRowClickEventArgs.Item;
+            
+            if (clickedDepartment != null)
+            {
+                selectedDepartment = selectedDepartment?.DepartmentCode == clickedDepartment.DepartmentCode 
+                    ? null // 同じ行をクリックした場合は選択解除
+                    : clickedDepartment; // 異なる行をクリックした場合は選択
+
+                Logger.LogDebug("部門選択: {DepartmentCode} - {DepartmentName}", 
+                    selectedDepartment?.DepartmentCode, selectedDepartment?.DepartmentName);
+                    
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "行クリック処理中にエラーが発生しました");
+            Snackbar.Add("選択処理中にエラーが発生しました。", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 行のCSSクラスを取得
+    /// </summary>
+    /// <param name="department">部門マスタ</param>
+    /// <param name="rowNumber">行番号</param>
+    /// <returns>CSSクラス名</returns>
+    private string GetRowClass(DepartmentMaster department, int rowNumber)
+    {
+        if (selectedDepartment != null && selectedDepartment.DepartmentCode == department.DepartmentCode)
+        {
+            return "selected-row";
+        }
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// 部門選択処理
+    /// </summary>
+    /// <param name="department">選択された部門</param>
+    private void SelectDepartment(DepartmentMaster? department)
+    {
+        try
+        {
+            if (department != null && MudDialog != null)
+            {
+                Logger.LogInformation("部門選択確定: {DepartmentCode} - {DepartmentName}", 
+                    department.DepartmentCode, department.DepartmentName);
+                    
+                MudDialog.Close(DialogResult.Ok(department));
+            }
+            else if (department == null)
+            {
+                Logger.LogWarning("選択された部門がnullです");
+                Snackbar.Add("部門を選択してください。", Severity.Warning);
+            }
+            else
+            {
+                Logger.LogError("MudDialogがnullです");
+                Snackbar.Add("ダイアログの処理中にエラーが発生しました。", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "部門選択確定処理中にエラーが発生しました");
+            Snackbar.Add("選択処理中にエラーが発生しました。", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// キャンセル処理
+    /// </summary>
+    private void Cancel()
+    {
+        try
+        {
+            Logger.LogDebug("部門検索ダイアログをキャンセルしました");
+            MudDialog?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "キャンセル処理中にエラーが発生しました");
+        }
+    }
+}
